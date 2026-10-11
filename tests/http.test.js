@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import request from "supertest";
-import { app } from "../backend/src/app.js";
+import app from "../app.js";
 process.env.APP_URL = "http://localhost:3000";
 process.env.APP_SECRET = "c".repeat(64);
 test("public pages and Bootstrap assets serve with security headers", async () => {
