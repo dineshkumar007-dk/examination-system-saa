@@ -16,7 +16,7 @@ export async function register(userId, examId) {
     )
       fail(403, "Only verified candidates may register.");
     const [exam] = await query(
-      "SELECT * FROM examinations WHERE id=? AND status='open' AND UTC_TIMESTAMP(3) BETWEEN registration_start AND registration_end FOR UPDATE",
+      "SELECT * FROM examinations WHERE id=? AND deleted_at IS NULL AND status='open' AND UTC_TIMESTAMP(3) BETWEEN registration_start AND registration_end FOR UPDATE",
       [examId],
       c,
     );
@@ -95,7 +95,7 @@ export async function simulatePayment(userId, registrationId, outcome) {
 }
 export async function myRegistrations(userId) {
   return query(
-    `SELECT r.*,e.name AS exam_name,e.instructions,p.status AS payment_status,p.mode AS payment_mode,p.amount,
+    `SELECT r.*,e.name AS exam_name,e.deleted_at AS exam_deleted_at,s.deleted_at AS slot_deleted_at,e.instructions,p.status AS payment_status,p.mode AS payment_mode,p.amount,
     a.id AS allocation_id,a.attendance,h.hall_number,(h.exam_password_hash IS NOT NULL) AS exam_password_set,
     s.starts_at,s.ends_at,c.name AS center_name,c.address AS center_address,pc.label AS computer_label,
     t.status AS attempt_status,t.submitted_at,rs.status AS result_status,CASE WHEN rs.status='Published' THEN rs.score ELSE NULL END AS score

@@ -19,7 +19,7 @@ export async function signup(data) {
   await transaction(async (c) => {
     if (data.examId) {
       const [exam] = await query(
-        "SELECT id FROM examinations WHERE id=? AND status='open' AND UTC_TIMESTAMP(3) BETWEEN registration_start AND registration_end",
+        "SELECT id FROM examinations WHERE id=? AND deleted_at IS NULL AND status='open' AND UTC_TIMESTAMP(3) BETWEEN registration_start AND registration_end",
         [data.examId],
         c,
       );

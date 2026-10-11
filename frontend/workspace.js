@@ -96,7 +96,9 @@ function renderForm(title, fields, values = {}, save) {
       dialog.remove();
       message(
         result?.message || "Saved successfully.",
-        result?.emailStatus === "queued" ? "warning" : "success",
+        result?.emailStatus === "queued" || result?.kind === "warning"
+          ? "warning"
+          : "success",
       );
       await load(view);
     } catch (error) {
@@ -290,9 +292,7 @@ async function render(target) {
         role === "admin"
           ? (r, i) =>
               button("Edit", "edit", i) +
-              (["draft", "open", "closed"].includes(r.status)
-                ? button("Delete", "delete", i, "outline-danger")
-                : "")
+              button("Delete", "delete", i, "outline-danger")
           : null,
       ) +
       pagination();
@@ -359,7 +359,7 @@ async function render(target) {
       else if (
         await confirmDialog(
           "Delete examination?",
-          `${r.name}: This permanently removes the examination, its questions and unused slots. Examinations with student registrations cannot be deleted; edit their schedule instead.`,
+          `${r.name}: This removes the examination and its slots from available lists and blocks further access. Student records are retained. Live examination attempts prevent deletion.`,
         )
       ) {
         await api("/manage/examinations/" + r.id, "DELETE");
@@ -459,7 +459,7 @@ async function render(target) {
           "capacity",
           "allocated",
         ),
-        (r, i) => button("Delete unused", "delete", i, "outline-danger"),
+        (r, i) => button("Delete", "delete", i, "outline-danger"),
       );
     bindToolbar(() =>
       renderForm(
@@ -498,7 +498,13 @@ async function render(target) {
       ),
     );
     bindActions(async (a, r) => {
-      if (await confirmDialog("Delete unused slot?", r.exam_name)) {
+      if (
+        await confirmDialog(
+          "Delete slot?",
+          r.exam_name +
+            ": Access and device grants for this slot will be revoked. Student records are retained. Live attempts prevent deletion.",
+        )
+      ) {
         await api("/manage/slots/" + r.id, "DELETE");
         await load(view);
       }
@@ -522,11 +528,13 @@ async function render(target) {
           "hall_number",
         ),
         (r, i) =>
-          r.allocation_id
-            ? button("Reissue credentials email", "activate", i)
-            : r.status === "completed"
-              ? button("Allocate slot", "allocate", i)
-              : "",
+          r.exam_deleted_at || r.slot_deleted_at
+            ? "Removed from schedule"
+            : r.allocation_id
+              ? button("Reissue credentials email", "activate", i)
+              : r.status === "completed"
+                ? button("Allocate slot", "allocate", i)
+                : "",
       ) +
       pagination();
     bindToolbar();
@@ -766,7 +774,7 @@ async function render(target) {
   if (view === "Invigilator") {
     rows = await api("/invigilator/candidates" + queryString());
     target.innerHTML =
-      '<p class="text-muted">Inspect physical identification and confirm the allocated center and slot before marking a candidate verified.</p>' +
+      '<p class="text-muted">Mark attendance records arrival only. To allow examination access, select Verify for exam, inspect physical identification, assign the computer and save.</p>' +
       toolbar() +
       table(
         rows,
@@ -781,7 +789,8 @@ async function render(target) {
         ),
         (r, i) =>
           !["Exam Started", "Exam Submitted"].includes(r.attendance)
-            ? button("Attendance / assign PC", "verify", i)
+            ? button("Verify for exam", "verify", i) +
+              button("Mark attendance", "attendance", i, "outline-secondary")
             : "",
       ) +
       pagination();
@@ -790,17 +799,19 @@ async function render(target) {
     bindActions(async (a, r) => {
       const pcs = await api("/manage/computers?centerId=" + r.center_id);
       renderForm(
-        "Verify " + r.name,
+        (a === "verify" ? "Verify for exam: " : "Mark attendance: ") + r.name,
         [
-          field(
-            "attendance",
-            "Attendance",
-            "select",
-            ["Present", "Verified", "Absent"].map((v) => ({
-              value: v,
-              label: v,
-            })),
-          ),
+          field("attendance", "Attendance", "select", [
+            {
+              value: "Present",
+              label: "Present — arrival only; exam access remains blocked",
+            },
+            {
+              value: "Verified",
+              label: "Verified — identity checked and computer assigned",
+            },
+            { value: "Absent", label: "Absent" },
+          ]),
           field("computerId", "Computer (required for Verified)", "select", [
             { value: "", label: "No computer" },
             ...optionList(
@@ -815,14 +826,35 @@ async function render(target) {
             boolOptions,
           ),
         ],
-        { attendance: "Present", identityChecked: false },
-        async (d) =>
-          api("/invigilator/verify", "POST", {
+        {
+          attendance:
+            a === "verify"
+              ? "Verified"
+              : ["Present", "Verified", "Absent"].includes(r.attendance)
+                ? r.attendance
+                : "Present",
+          computerId: r.computer_id || "",
+          identityChecked: !!r.verified_at,
+        },
+        async (d) => {
+          const revokeVerification =
+            r.attendance === "Verified" && d.attendance !== "Verified";
+          if (
+            revokeVerification &&
+            !(await confirmDialog(
+              "Remove candidate verification?",
+              "This will clear the assigned computer and block this student's examination access.",
+            ))
+          )
+            throw new Error("Verification change cancelled.");
+          return api("/invigilator/verify", "POST", {
             allocationId: r.id,
             attendance: d.attendance,
             computerId: d.computerId || null,
             identityChecked: d.identityChecked === "true",
-          }),
+            revokeVerification,
+          });
+        },
       );
     });
     return;

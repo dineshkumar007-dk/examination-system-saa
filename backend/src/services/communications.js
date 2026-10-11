@@ -86,7 +86,7 @@ export async function processNotifications(limit = 20, notificationId) {
       const payload = unseal(item.payload_encrypted);
       if (payload.examPasswordHash) {
         const [ticket] = await query(
-          "SELECT exam_password_hash FROM hall_tickets WHERE allocation_id=?",
+          "SELECT exam_password_hash FROM hall_tickets h JOIN candidate_allocations a ON a.id=h.allocation_id JOIN registrations r ON r.id=a.registration_id JOIN examinations e ON e.id=r.exam_id JOIN exam_slots s ON s.id=a.slot_id WHERE h.allocation_id=? AND e.deleted_at IS NULL AND s.deleted_at IS NULL",
           [payload.allocationId],
         );
         if (!ticket || ticket.exam_password_hash !== payload.examPasswordHash) {

@@ -5,7 +5,7 @@ Checked on 11 October 2026 using Node.js 24.11.1.
 | Check | Result |
 |---|---|
 | `npm run lint` | Passed |
-| `npm test` | 41 passed, 0 failed |
+| `npm test` | 43 passed, 0 failed |
 | `npm run build` | Passed; JavaScript syntax checked and deployment static assets generated |
 | npm dependency audit after installing patched Nodemailer and formatter | 0 vulnerabilities reported |
 | Local HTTP tests | Passed for public assets, protected APIs, CSRF, security headers, request-size rejection and safe errors |
@@ -19,7 +19,7 @@ Checked on 11 October 2026 using Node.js 24.11.1.
 | Real concurrency | Not verified; use the dedicated MySQL integration suite |
 | Vercel deployment and redeployment persistence | Not performed; provider accounts/configuration required |
 
-The 41 tests comprise 12 pure validation/security checks, 5 real local HTTP checks and 24 isolated mocked authentication, exam-service and frontend-initialization checks. Mocked delivery and repository tests are not evidence of real provider delivery or database behavior. The optional MySQL suite tests saved data across connection-pool restart; production redeployment persistence still requires a deployed test.
+The 43 tests comprise 12 pure validation/security checks, 5 real local HTTP checks and 26 isolated mocked authentication, exam-service and frontend-initialization checks. Mocked delivery and repository tests are not evidence of real provider delivery or database behavior. The optional MySQL suite tests saved data across connection-pool restart; production redeployment persistence still requires a deployed test.
 
 The source contains no production mock-delivery switch, fixed OTP, hardcoded user, in-memory production database, or public administrative signup. Payment functionality is explicitly a simulation. QR scanning, hardware attestation, automated ID verification and real payment collection are not implemented.
 
@@ -40,3 +40,7 @@ User deletion added with access revocation and retained exam records. Migration 
 Deletion now permanently removes unused accounts and releases identifiers on retained exam-history accounts. Removed the previously deleted unused invigilator that caused the email conflict; verified no user row remains for its ID or email.
 
 Immediate credentials delivery after committed allocation/reissue is implemented. Isolated checks confirm targeted delivery to the registered email, erasure after success, and encrypted queued retry on SMTP failure. No additional student allocation or password reset was performed during this change.
+
+Exam/slot deletion now marks retained records as deleted and hides them from administrative/public lists, revokes workstation grants, blocks candidate exam access and cancels registrations when an exam is removed. Live attempts block deletion. Migration 004 applied; 41 tests, lint and build passed. No current exam or slot was deleted.
+
+Fixed attendance edit defaults that could replace Verified with Present and clear the computer assignment. Saved attendance, computer and identity-check state are now preserved; explicit confirmation is required to revoke verification. Regression checks passed. No candidate identity verification was performed automatically.

@@ -172,6 +172,8 @@ test("exam gate validates every eligibility and workstation condition", () => {
     { email_verified_at: null },
 
     { exam_status: "closed" },
+    { exam_deleted_at: "yes" },
+    { slot_deleted_at: "yes" },
     { center_active: 0 },
     { computer_active: 0 },
     { verified_at: null },

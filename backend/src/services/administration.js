@@ -81,33 +81,74 @@ export async function deleteExamination(actor, examId) {
       [examId],
       c,
     );
-    if (!exam) fail(404, "Examination not found.");
-    if (!["draft", "open", "closed"].includes(exam.status))
-      fail(409, "Active or completed examinations cannot be deleted.");
-    const [{ n }] = await query(
-      "SELECT COUNT(*) AS n FROM registrations WHERE exam_id=?",
+    if (!exam || exam.deleted_at) fail(404, "Examination not found.");
+    const [{ live }] = await query(
+      "SELECT COUNT(*) AS live FROM exam_attempts t JOIN candidate_allocations a ON a.id=t.allocation_id JOIN registrations r ON r.id=a.registration_id WHERE r.exam_id=? AND t.status='in_progress'",
       [examId],
       c,
     );
-    if (n)
+    if (live)
       fail(
         409,
-        "This examination has student registrations. Edit its schedule to postpone it instead of deleting student records.",
+        "This examination has live attempts. Submit or finalize them before deletion.",
       );
     await query(
-      "DELETE w FROM workstation_sessions w JOIN exam_slots s ON s.id=w.slot_id WHERE s.exam_id=?",
+      "UPDATE examinations SET deleted_at=UTC_TIMESTAMP(3) WHERE id=?",
       [examId],
       c,
     );
-    await query("DELETE FROM exam_slots WHERE exam_id=?", [examId], c);
-    await query("DELETE FROM questions WHERE exam_id=?", [examId], c);
+    await query(
+      "UPDATE exam_slots SET deleted_at=UTC_TIMESTAMP(3) WHERE exam_id=?",
+      [examId],
+      c,
+    );
+    await query(
+      "UPDATE registrations SET status='cancelled' WHERE exam_id=?",
+      [examId],
+      c,
+    );
     await query(
       "UPDATE students SET selected_exam_id=NULL WHERE selected_exam_id=?",
       [examId],
       c,
     );
-    await query("DELETE FROM examinations WHERE id=?", [examId], c);
+    await query(
+      "DELETE w FROM workstation_sessions w JOIN exam_slots s ON s.id=w.slot_id WHERE s.exam_id=?",
+      [examId],
+      c,
+    );
     await audit(actor, "exam.delete", examId, c);
+  });
+}
+export async function deleteSlot(actor, slotId) {
+  return transaction(async (c) => {
+    const [slot] = await query(
+      "SELECT * FROM exam_slots WHERE id=? FOR UPDATE",
+      [slotId],
+      c,
+    );
+    if (!slot || slot.deleted_at) fail(404, "Slot not found.");
+    const [{ live }] = await query(
+      "SELECT COUNT(*) AS live FROM exam_attempts t JOIN candidate_allocations a ON a.id=t.allocation_id WHERE a.slot_id=? AND t.status='in_progress'",
+      [slotId],
+      c,
+    );
+    if (live)
+      fail(
+        409,
+        "This slot has live attempts. Submit or finalize them before deletion.",
+      );
+    await query(
+      "UPDATE exam_slots SET deleted_at=UTC_TIMESTAMP(3) WHERE id=?",
+      [slotId],
+      c,
+    );
+    await query(
+      "DELETE FROM workstation_sessions WHERE slot_id=?",
+      [slotId],
+      c,
+    );
+    await audit(actor, "slot.delete", slotId, c);
   });
 }
 export async function createSlot(actor, d) {
@@ -123,7 +164,7 @@ export async function createSlot(actor, d) {
       c,
     );
     if (!center?.active) fail(400, "Select an active examination center.");
-    if (!exam)
+    if (!exam || exam.deleted_at)
       fail(
         400,
         "The selected examination no longer exists. Refresh and select an examination.",
@@ -142,7 +183,7 @@ export async function createSlot(actor, d) {
         `This examination requires at least ${exam.duration_minutes} minutes. Choose an end time at least ${exam.duration_minutes} minutes after the start time.`,
       );
     const overlaps = await query(
-      "SELECT id FROM exam_slots WHERE center_id=? AND starts_at<? AND ends_at>?",
+      "SELECT id FROM exam_slots WHERE deleted_at IS NULL AND center_id=? AND starts_at<? AND ends_at>?",
       [d.centerId, dateSql(d.endsAt), dateSql(d.startsAt)],
       c,
     );
@@ -168,7 +209,7 @@ export async function createSlot(actor, d) {
 export async function allocate(actor, registrationId, slotId) {
   return transaction(async (c) => {
     const [slot] = await query(
-      "SELECT s.*,e.status AS exam_status FROM exam_slots s JOIN examinations e ON e.id=s.exam_id WHERE s.id=? FOR UPDATE",
+      "SELECT s.*,e.status AS exam_status,e.deleted_at AS exam_deleted_at FROM exam_slots s JOIN examinations e ON e.id=s.exam_id WHERE s.id=? FOR UPDATE",
       [slotId],
       c,
     );
@@ -182,7 +223,7 @@ export async function allocate(actor, registrationId, slotId) {
       [slot?.center_id || ""],
       c,
     );
-    if (!slot)
+    if (!slot || slot.deleted_at || slot.exam_deleted_at)
       fail(404, "Examination slot not found. Select an existing slot.");
     if (!reg) fail(404, "Registration not found.");
     if (reg.exam_id !== slot.exam_id)
@@ -324,15 +365,25 @@ export async function verifyAndAssign(
   allocationId,
   computerId,
   attendance,
+  revokeVerification = false,
 ) {
   await transaction(async (c) => {
     const [a] = await query(
-      "SELECT a.*,s.center_id,s.ends_at FROM candidate_allocations a JOIN exam_slots s ON s.id=a.slot_id WHERE a.id=? FOR UPDATE",
+      "SELECT a.*,s.center_id,s.ends_at FROM candidate_allocations a JOIN exam_slots s ON s.id=a.slot_id WHERE a.id=? AND s.deleted_at IS NULL FOR UPDATE",
       [allocationId],
       c,
     );
     if (!a) fail(404, "Allocation not found.");
     centerScope(actor, a.center_id);
+    if (
+      a.attendance === "Verified" &&
+      attendance !== "Verified" &&
+      !revokeVerification
+    )
+      fail(
+        409,
+        "This candidate is already verified. Confirm removal of verification before changing attendance.",
+      );
     if (
       ["Exam Started", "Exam Submitted"].includes(a.attendance) ||
       nowMs(a.ends_at) < Date.now()
@@ -364,7 +415,7 @@ export async function enrollWorkstation(actor, slotId, computerId) {
   const value = token();
   const expires = await transaction(async (c) => {
     const [slot] = await query(
-      "SELECT * FROM exam_slots WHERE id=?",
+      "SELECT * FROM exam_slots WHERE id=? AND deleted_at IS NULL",
       [slotId],
       c,
     );
@@ -415,7 +466,12 @@ export async function saveQuestion(actor, d, questionId) {
       [d.examId],
       c,
     );
-    if (!exam || ["active", "completed"].includes(exam.status) || n)
+    if (
+      !exam ||
+      exam.deleted_at ||
+      ["active", "completed"].includes(exam.status) ||
+      n
+    )
       fail(
         409,
         "Questions are locked when an examination is active or has attempts.",

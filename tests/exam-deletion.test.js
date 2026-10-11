@@ -1,65 +1,63 @@
 import { test, mock } from "node:test";
 import assert from "node:assert/strict";
-const state = { exam: null, registrations: 0, queries: [] };
+const state = { record: { status: "open" }, live: 0, queries: [] };
 mock.module("../backend/src/config/database.js", {
   namedExports: {
     transaction: async (fn) => fn({}),
     query: async (sql) => {
       state.queries.push(sql);
-      if (sql.startsWith("SELECT * FROM examinations"))
-        return state.exam ? [state.exam] : [];
-      if (sql.startsWith("SELECT COUNT(*)"))
-        return [{ n: state.registrations }];
+      if (sql.startsWith("SELECT *")) return state.record ? [state.record] : [];
+      if (sql.startsWith("SELECT COUNT")) return [{ live: state.live }];
       return {};
     },
   },
 });
-const { deleteExamination } = await import(
+const { deleteExamination, deleteSlot } = await import(
   "../backend/src/services/administration.js"
 );
-function setup(status, registrations = 0) {
-  state.exam = status ? { status } : null;
-  state.registrations = registrations;
-  state.queries = [];
-}
-test("unused draft, open and closed exams delete their dependent records in one transaction", async () => {
-  for (const status of ["draft", "open", "closed"]) {
-    setup(status);
-    await deleteExamination("admin", "exam");
+test("exam and slot deletion revokes device access while retaining student records", async () => {
+  for (const action of [deleteExamination, deleteSlot]) {
+    state.record = { status: "active" };
+    state.live = 0;
+    state.queries = [];
+    await action("admin", "id");
     assert.ok(
-      state.queries.some((sql) =>
-        sql.startsWith("DELETE w FROM workstation_sessions"),
+      state.queries.some((sql) => sql.includes("deleted_at=UTC_TIMESTAMP")),
+    );
+    assert.ok(
+      state.queries.some(
+        (sql) =>
+          sql.startsWith("DELETE") && sql.includes("workstation_sessions"),
       ),
     );
     assert.ok(
-      state.queries.some((sql) => sql.startsWith("DELETE FROM questions")),
-    );
-    const deleted = state.queries.indexOf(
-      "DELETE FROM examinations WHERE id=?",
-    );
-    assert.ok(
-      deleted > state.queries.indexOf("DELETE FROM exam_slots WHERE exam_id=?"),
+      state.queries.every(
+        (sql) =>
+          !/^DELETE FROM (registrations|exam_attempts|student_answers|results)/.test(
+            sql,
+          ),
+      ),
     );
     assert.ok(state.queries.at(-1).startsWith("INSERT INTO audit_logs"));
   }
 });
-test("registered, active and completed exams reject deletion before any mutation", async () => {
-  for (const [status, registrations] of [
-    ["open", 1],
-    ["closed", 1],
-    ["active", 0],
-    ["completed", 0],
-  ]) {
-    setup(status, registrations);
+test("deletion blocks live attempts and rejects missing or already removed records", async () => {
+  for (const action of [deleteExamination, deleteSlot]) {
+    state.record = {};
+    state.live = 1;
+    state.queries = [];
     await assert.rejects(
-      deleteExamination("admin", "exam"),
+      action("admin", "id"),
       (error) => error.status === 409,
     );
     assert.ok(state.queries.every((sql) => sql.startsWith("SELECT")));
+    for (const record of [null, { deleted_at: "yes" }]) {
+      state.record = record;
+      state.live = 0;
+      await assert.rejects(
+        action("admin", "id"),
+        (error) => error.status === 404,
+      );
+    }
   }
-  setup(null);
-  await assert.rejects(
-    deleteExamination("admin", "missing"),
-    (error) => error.status === 404,
-  );
 });

@@ -71,7 +71,7 @@ router.get("/examinations", async (req, res) => {
   const p = paging(req);
   res.json(
     await query(
-      "SELECT id,name,description,instructions,duration_minutes,registration_start,registration_end,fee,status FROM examinations WHERE status<>'draft' AND name LIKE ? ORDER BY registration_start DESC LIMIT ? OFFSET ?",
+      "SELECT id,name,description,instructions,duration_minutes,registration_start,registration_end,fee,status FROM examinations WHERE deleted_at IS NULL AND status<>'draft' AND name LIKE ? ORDER BY registration_start DESC LIMIT ? OFFSET ?",
       [`%${p.search}%`, p.limit, p.offset],
     ),
   );
@@ -332,7 +332,7 @@ router.get(
     const p = paging(req);
     res.json(
       await query(
-        "SELECT * FROM examinations WHERE name LIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+        "SELECT * FROM examinations WHERE deleted_at IS NULL AND name LIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
         [`%${p.search}%`, p.limit, p.offset],
       ),
     );
@@ -372,7 +372,7 @@ router.put("/manage/examinations/:id", roles("admin"), async (req, res) => {
       [examId],
       c,
     );
-    if (!old) fail(404, "Examination not found.");
+    if (!old || old.deleted_at) fail(404, "Examination not found.");
     const transitions = {
       draft: ["draft", "open"],
       open: ["open", "closed"],
@@ -480,7 +480,7 @@ router.put("/manage/centers/:id", roles("admin"), async (req, res) => {
     );
     if (!old) fail(404, "Center not found.");
     const [{ n }] = await query(
-      "SELECT COALESCE(MAX(capacity),0) AS n FROM exam_slots WHERE center_id=? AND ends_at>UTC_TIMESTAMP(3)",
+      "SELECT COALESCE(MAX(capacity),0) AS n FROM exam_slots WHERE deleted_at IS NULL AND center_id=? AND ends_at>UTC_TIMESTAMP(3)",
       [centerId],
       c,
     );
@@ -554,7 +554,7 @@ router.patch("/manage/computers/:id", roles("admin"), async (req, res) => {
   await transaction(async (c) => {
     await query("SELECT id FROM computers WHERE id=? FOR UPDATE", [pcId], c);
     const live = await query(
-      "SELECT a.id FROM candidate_allocations a JOIN exam_slots s ON s.id=a.slot_id WHERE a.computer_id=? AND s.ends_at>UTC_TIMESTAMP(3)",
+      "SELECT a.id FROM candidate_allocations a JOIN exam_slots s ON s.id=a.slot_id WHERE s.deleted_at IS NULL AND a.computer_id=? AND s.ends_at>UTC_TIMESTAMP(3)",
       [pcId],
       c,
     );
@@ -567,7 +567,7 @@ router.patch("/manage/computers/:id", roles("admin"), async (req, res) => {
 router.get("/manage/slots", roles("admin", "invigilator"), async (req, res) => {
   res.json(
     await query(
-      `SELECT s.*,e.name AS exam_name,c.name AS center_name,(SELECT COUNT(*) FROM candidate_allocations a WHERE a.slot_id=s.id) AS allocated FROM exam_slots s JOIN examinations e ON e.id=s.exam_id JOIN exam_centers c ON c.id=s.center_id ${req.user.role === "invigilator" ? "WHERE s.center_id=?" : ""} ORDER BY s.starts_at DESC LIMIT 200`,
+      `SELECT s.*,e.name AS exam_name,c.name AS center_name,(SELECT COUNT(*) FROM candidate_allocations a WHERE a.slot_id=s.id) AS allocated FROM exam_slots s JOIN examinations e ON e.id=s.exam_id JOIN exam_centers c ON c.id=s.center_id WHERE s.deleted_at IS NULL AND e.deleted_at IS NULL ${req.user.role === "invigilator" ? "AND s.center_id=?" : ""} ORDER BY s.starts_at DESC LIMIT 200`,
       req.user.role === "invigilator" ? [req.user.center_id] : [],
     ),
   );
@@ -579,17 +579,14 @@ router.post("/manage/slots", roles("admin"), async (req, res) =>
 );
 router.delete("/manage/slots/:id", roles("admin"), async (req, res) => {
   const slotId = id.parse(req.params.id);
-  await transaction(async (c) => {
-    await query("DELETE FROM exam_slots WHERE id=?", [slotId], c);
-    await admin.audit(req.user.id, "slot.delete", slotId, c);
-  });
+  await admin.deleteSlot(req.user.id, slotId);
   res.json({ message: "Deleted." });
 });
 router.get("/manage/registrations", roles("admin"), async (req, res) => {
   const p = paging(req);
   res.json(
     await query(
-      `SELECT r.*,u.name,u.email,e.name AS exam_name,p.status AS payment_status,a.id AS allocation_id,a.slot_id,h.hall_number FROM registrations r JOIN users u ON u.id=r.user_id JOIN examinations e ON e.id=r.exam_id LEFT JOIN payments p ON p.registration_id=r.id LEFT JOIN candidate_allocations a ON a.registration_id=r.id LEFT JOIN hall_tickets h ON h.allocation_id=a.id WHERE (r.registration_number LIKE ? OR u.name LIKE ?) ORDER BY r.created_at DESC LIMIT ? OFFSET ?`,
+      `SELECT r.*,u.name,u.email,e.name AS exam_name,e.deleted_at AS exam_deleted_at,s.deleted_at AS slot_deleted_at,p.status AS payment_status,a.id AS allocation_id,a.slot_id,h.hall_number FROM registrations r JOIN users u ON u.id=r.user_id JOIN examinations e ON e.id=r.exam_id LEFT JOIN payments p ON p.registration_id=r.id LEFT JOIN candidate_allocations a ON a.registration_id=r.id LEFT JOIN exam_slots s ON s.id=a.slot_id LEFT JOIN hall_tickets h ON h.allocation_id=a.id WHERE (r.registration_number LIKE ? OR u.name LIKE ?) ORDER BY r.created_at DESC LIMIT ? OFFSET ?`,
       [`%${p.search}%`, `%${p.search}%`, p.limit, p.offset],
     ),
   );
@@ -605,22 +602,20 @@ router.post("/manage/allocate", roles("admin"), async (req, res) => {
     d.slotId,
   );
   const emailStatus = await deliverQueuedNotification(notificationId);
-  res
-    .status(201)
-    .json({
-      ...allocation,
-      emailStatus,
-      message:
-        emailStatus === "sent"
-          ? "Slot allocated. Examination credentials email sent to the student's registered email."
-          : "Slot allocated. Email delivery is pending; credentials remain queued for retry. Do not allocate again.",
-    });
+  res.status(201).json({
+    ...allocation,
+    emailStatus,
+    message:
+      emailStatus === "sent"
+        ? "Slot allocated. Examination credentials email sent to the student's registered email."
+        : "Slot allocated. Email delivery is pending; credentials remain queued for retry. Do not allocate again.",
+  });
 });
 router.post("/manage/activation/:id", roles("admin"), async (req, res) => {
   const allocationId = id.parse(req.params.id);
   const notificationId = await transaction(async (c) => {
     const [r] = await query(
-      "SELECT r.*,h.hall_number FROM candidate_allocations a JOIN registrations r ON r.id=a.registration_id JOIN hall_tickets h ON h.allocation_id=a.id WHERE a.id=? FOR UPDATE",
+      "SELECT r.*,h.hall_number FROM candidate_allocations a JOIN registrations r ON r.id=a.registration_id JOIN hall_tickets h ON h.allocation_id=a.id JOIN exam_slots s ON s.id=a.slot_id JOIN examinations e ON e.id=r.exam_id WHERE a.id=? AND s.deleted_at IS NULL AND e.deleted_at IS NULL FOR UPDATE",
       [allocationId],
       c,
     );
@@ -824,6 +819,7 @@ router.post(
         computerId: id.nullable(),
         attendance: z.enum(["Present", "Verified", "Absent"]),
         identityChecked: z.boolean(),
+        revokeVerification: z.boolean().default(false),
       })
       .strict()
       .parse(req.body);
@@ -834,8 +830,17 @@ router.post(
       d.allocationId,
       d.computerId,
       d.attendance,
+      d.revokeVerification,
     );
-    res.json({ message: "Attendance and computer assignment saved." });
+    res.json({
+      kind: d.attendance === "Present" ? "warning" : "success",
+      message:
+        d.attendance === "Verified"
+          ? "Candidate verified and computer assigned. Sign out and let the candidate sign in on the authorized browser."
+          : d.attendance === "Present"
+            ? "Arrival marked Present only. Exam access is still blocked. Use Verify for exam to confirm identity and assign a computer."
+            : "Candidate marked Absent. Exam access is blocked.",
+    });
   },
 );
 router.post(

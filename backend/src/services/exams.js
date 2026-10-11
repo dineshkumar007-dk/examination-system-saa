@@ -8,6 +8,8 @@ export function gateExam(row, workstation, now = Date.now()) {
   return (
     !!row &&
     !!workstation &&
+    !row.exam_deleted_at &&
+    !row.slot_deleted_at &&
     row.registration_status === "completed" &&
     row.user_status === "active" &&
     !!row.email_verified_at &&
@@ -23,7 +25,7 @@ export function gateExam(row, workstation, now = Date.now()) {
     now < nowMs(workstation.expires_at)
   );
 }
-const allocationSql = `SELECT a.*,r.user_id,r.exam_id,r.registration_number,r.status AS registration_status,u.status AS user_status,u.email_verified_at,u.phone_verified_at,u.name AS candidate_name,e.name AS exam_name,e.status AS exam_status,e.duration_minutes,e.instructions,s.starts_at,s.ends_at,s.center_id,c.active AS center_active,pc.active AS computer_active,h.hall_number,h.exam_password_hash FROM candidate_allocations a JOIN registrations r ON r.id=a.registration_id JOIN users u ON u.id=r.user_id JOIN examinations e ON e.id=r.exam_id JOIN exam_slots s ON s.id=a.slot_id JOIN exam_centers c ON c.id=s.center_id LEFT JOIN computers pc ON pc.id=a.computer_id JOIN hall_tickets h ON h.allocation_id=a.id`;
+const allocationSql = `SELECT a.*,r.user_id,r.exam_id,r.registration_number,r.status AS registration_status,u.status AS user_status,u.email_verified_at,u.phone_verified_at,u.name AS candidate_name,e.name AS exam_name,e.status AS exam_status,e.deleted_at AS exam_deleted_at,s.deleted_at AS slot_deleted_at,e.duration_minutes,e.instructions,s.starts_at,s.ends_at,s.center_id,c.active AS center_active,pc.active AS computer_active,h.hall_number,h.exam_password_hash FROM candidate_allocations a JOIN registrations r ON r.id=a.registration_id JOIN users u ON u.id=r.user_id JOIN examinations e ON e.id=r.exam_id JOIN exam_slots s ON s.id=a.slot_id JOIN exam_centers c ON c.id=s.center_id LEFT JOIN computers pc ON pc.id=a.computer_id JOIN hall_tickets h ON h.allocation_id=a.id`;
 export async function finalize(attempt, c) {
   if (attempt.status === "submitted") return;
   await query(
@@ -110,7 +112,14 @@ export async function examLogin(
     if (!gateExam(row, workstation))
       return {
         error:
-          "Examination access denied. Check center, workstation, slot, attendance, verification and examination status with your invigilator.",
+          !row.verified_at ||
+          !["Verified", "Exam Started"].includes(row.attendance)
+            ? "Your attendance is not Verified. Ask the invigilator to verify your identity, assign your computer and save. Granting device access alone is not sufficient."
+            : !row.computer_id
+              ? "No computer is assigned to your registration. Ask the invigilator to assign your authorized computer."
+              : !workstation
+                ? "This browser has no valid device grant. The invigilator must grant access in this same browser before you sign in."
+                : "Examination access denied. Check center, workstation, slot, attendance, verification and examination status with your invigilator.",
       };
     const [{ n }] = await query(
       "SELECT COUNT(*) AS n FROM questions WHERE exam_id=?",
