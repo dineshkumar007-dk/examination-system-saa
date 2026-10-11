@@ -1,0 +1,10 @@
+node_modules/
+.env
+.env.*
+!.env.example
+coverage/
+*.pem
+*.log
+.vercel/
+public/
+test-results/
