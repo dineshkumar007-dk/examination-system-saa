@@ -31,6 +31,7 @@ const user = {
   email: "personal@example.com",
   phone: "+919876543210",
   dob: "2000-01-01",
+  gender: "female",
   address: "A valid postal address",
   password: "long-unique-password",
   confirmPassword: "long-unique-password",

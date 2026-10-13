@@ -4,7 +4,9 @@ import { api, home, setAdminAccess, dateText } from "./api.js";
 import { Form, field, Notice } from "./components.jsx";
 import { Workspace } from "./workspace.jsx";
 import { Exam } from "./exam.jsx";
+import { Avatar, Icon } from "./illustrations.jsx";
 import "./styles.css";
+import "./pastel.css";
 const protectedPaths = [
   "/manage",
   "/dashboard",
@@ -83,7 +85,9 @@ function App() {
     <>
       <header className="topbar">
         <a href="/" onClick={(e) => link(e, "/")} className="brand">
-          <span className="brand-symbol">E</span>
+          <span className="brand-symbol">
+            <Icon name="cap" size={29} />
+          </span>
           <span>
             EXAMPRO<small>Examination services</small>
           </span>
@@ -255,6 +259,7 @@ function Landing({ navigate }) {
   );
 }
 function AuthPage({ path, login, navigate, setUser, setNotice, notice }) {
+  const [illustrationGender, setIllustrationGender] = useState(null);
   const signup = path === "/signup",
     invigilator = path === "/invigilator-login";
   let title = "Welcome back",
@@ -286,6 +291,18 @@ function AuthPage({ path, login, navigate, setUser, setNotice, notice }) {
         help: "For example +919876543210",
       }),
       field("dob", "Date of birth", "date"),
+      field(
+        "gender",
+        "Gender",
+        "select",
+        [
+          { value: "male", label: "Male" },
+          { value: "female", label: "Female" },
+        ],
+        {
+          help: "Used for your profile illustration. You can update it in Profile.",
+        },
+      ),
       field("address", "Address", "textarea", null, { wide: true }),
       field("password", "Password — at least 12 characters", "password"),
       field("confirmPassword", "Confirm password", "password"),
@@ -354,6 +371,11 @@ function AuthPage({ path, login, navigate, setUser, setNotice, notice }) {
   return (
     <main className={`auth-page ${signup ? "signup-page" : ""}`}>
       <aside className="auth-note">
+        <Avatar
+          gender={illustrationGender}
+          scene
+          className="auth-illustration"
+        />
         <p className="eyebrow">EXAMPRO / ACCOUNT ACCESS</p>
         <h2>
           {invigilator
@@ -385,7 +407,14 @@ function AuthPage({ path, login, navigate, setUser, setNotice, notice }) {
         <h1>{title}</h1>
         <p className="muted">{intro}</p>
         <Notice message={notice} />
-        <Form fields={fields} onSubmit={submit} button={button} />
+        <Form
+          fields={fields}
+          onSubmit={submit}
+          button={button}
+          onValuesChange={
+            signup ? (v) => setIllustrationGender(v.gender || null) : undefined
+          }
+        />
         <div className="auth-links">
           {["/login", "/invigilator-login"].includes(path) && (
             <>

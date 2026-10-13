@@ -67,6 +67,7 @@ export function Form({
   onSubmit,
   button = "Save",
   onCancel,
+  onValuesChange,
 }) {
   const [values, setValues] = useState(() =>
     Object.fromEntries(
@@ -92,8 +93,11 @@ export function Form({
     >
       <div className="form-grid">
         {fields.map((f) => {
-          const change = (e) =>
-            setValues((v) => ({ ...v, [f.name]: e.target.value }));
+          const change = (e) => {
+            const next = { ...values, [f.name]: e.target.value };
+            setValues(next);
+            onValuesChange?.(next);
+          };
           const options =
             typeof f.options === "function" ? f.options(values) : f.options;
           return f.type === "password" ? (

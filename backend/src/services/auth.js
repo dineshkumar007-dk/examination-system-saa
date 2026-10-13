@@ -12,6 +12,7 @@ export const publicUser = (u) => ({
   role: u.role,
   status: u.status,
   emailVerified: !!u.email_verified_at,
+  gender: u.gender || null,
 });
 export async function signup(data) {
   const hash = await bcrypt.hash(data.password, 12);
@@ -26,8 +27,8 @@ export async function signup(data) {
       if (!exam) fail(409, "This examination is not accepting registrations.");
     }
     await query(
-      "INSERT INTO users(id,name,email,phone,password_hash) VALUES(?,?,?,?,?)",
-      [userId, data.name, data.email, data.phone, hash],
+      "INSERT INTO users(id,name,email,phone,password_hash,gender) VALUES(?,?,?,?,?,?)",
+      [userId, data.name, data.email, data.phone, hash, data.gender],
       c,
     );
     await query(

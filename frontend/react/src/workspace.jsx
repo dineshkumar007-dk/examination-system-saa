@@ -1,5 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { api, dateText, localDate } from "./api.js";
+import { Avatar, Icon } from "./illustrations.jsx";
+import {
+  CandidateDashboard,
+  CandidateRecords,
+} from "./candidate-dashboard.jsx";
 import {
   Form,
   field,
@@ -32,6 +37,8 @@ const menus = {
     "Overview",
     "Examinations",
     "My registrations",
+    "Hall tickets",
+    "Results",
     "Profile",
     "Notifications",
   ],
@@ -154,13 +161,18 @@ export function Workspace({ user, navigate }) {
           : [];
       else if (view === "Admission")
         data = await api("/invigilator/candidates" + q);
-      else if (view === "Results") data = await api("/manage/attempts" + q);
+      else if (view === "Results")
+        data = await api(
+          user.role === "candidate"
+            ? "/registrations/mine"
+            : "/manage/attempts" + q,
+        );
       else if (view === "Notifications")
         data = await api(
           user.role === "admin" ? "/manage/notifications" : "/notifications",
         );
       else if (view === "Audit") data = await api("/manage/audit" + q);
-      else if (view === "My registrations")
+      else if (["My registrations", "Hall tickets"].includes(view))
         data = await api("/registrations/mine");
       else if (view === "Profile") {
         const p = await api("/profile");
@@ -767,14 +779,21 @@ export function Workspace({ user, navigate }) {
       : null,
   }[view];
   return (
-    <div className="workspace">
+    <div
+      className={`workspace role-${user.role} view-${view === "Overview" ? "overview" : "records"}`}
+    >
       <aside className="sidebar">
         <div className="sidebar-title">
+          <div className="sidebar-brand">
+            <Icon name="cap" size={47} />
+            <strong>EXAMPRO</strong>
+            <p>Examination Portal</p>
+          </div>
           <span className="eyebrow">{user.role} workspace</span>
           <strong>{user.name}</strong>
         </div>
         <nav>
-          {menus[user.role].map((v, i) => (
+          {menus[user.role].map((v) => (
             <button
               key={v}
               className={view === v ? "selected" : ""}
@@ -786,15 +805,49 @@ export function Workspace({ user, navigate }) {
                 setNotice(null);
               }}
             >
-              <span>{String(i + 1).padStart(2, "0")}</span>
-              {v}
+              <Icon
+                name={
+                  {
+                    Overview: "home",
+                    Examinations: "file",
+                    "My registrations": "file",
+                    "Hall tickets": "ticket",
+                    Results: "chart",
+                    Notifications: "bell",
+                    Profile: "settings",
+                    Users: "people",
+                    Computers: "monitor",
+                    Slots: "calendar",
+                    Workstations: "monitor",
+                    Centers: "pin",
+                  }[v] || "file"
+                }
+              />
+              {v === "Overview"
+                ? "Dashboard"
+                : v === "Profile"
+                  ? "Settings"
+                  : v}
             </button>
           ))}
         </nav>
         <div className="sidebar-note">
-          One examination.
-          <br />
-          Every detail accounted for.
+          <Avatar gender={profile?.gender ?? user.gender} scene />
+          <h3>Ready for exam day?</h3>
+          <p>
+            Keep your hall ticket and photo ID ready. Your center staff can help
+            with admission.
+          </p>
+          <button
+            className="secondary"
+            onClick={() =>
+              user.role === "candidate"
+                ? setView("My registrations")
+                : setView(menus[user.role][0])
+            }
+          >
+            Your examination details <Icon name="arrow" size={16} />
+          </button>
         </div>
       </aside>
       <main className="workspace-main">
@@ -806,7 +859,10 @@ export function Workspace({ user, navigate }) {
             </p>
             <h1>{view}</h1>
             <p className="muted">
-              {descriptions[view] || "Your examination details, kept together."}
+              {user.role === "candidate" && view === "Results"
+                ? "Your submitted examinations and published results."
+                : descriptions[view] ||
+                  "Your examination details, kept together."}
             </p>
           </div>
           {add && <button onClick={add[1]}>{add[0]} +</button>}
@@ -847,39 +903,19 @@ export function Workspace({ user, navigate }) {
                 </>
               ) : (
                 <>
-                  <div className="welcome">
-                    <p className="eyebrow">Email verified</p>
-                    <h2>Welcome, {user.name.split(" ")[0]}.</h2>
-                    <p>
-                      Track your applications and get ready for examination day.
-                    </p>
-                  </div>
-                  <div className="metrics">
-                    <div>
-                      <span>Applications</span>
-                      <strong>{rows.length}</strong>
-                    </div>
-                    <div>
-                      <span>Center allocations</span>
-                      <strong>
-                        {rows.filter((r) => r.allocation_id).length}
-                      </strong>
-                    </div>
-                    <div>
-                      <span>Published results</span>
-                      <strong>
-                        {
-                          rows.filter((r) => r.result_status === "Published")
-                            .length
-                        }
-                      </strong>
-                    </div>
-                  </div>
+                  <CandidateDashboard
+                    user={user}
+                    profile={profile}
+                    rows={rows}
+                    onView={setView}
+                    navigate={navigate}
+                  />
                   {profile?.selected_exam_id &&
                     !rows.some(
                       (r) => r.exam_id === profile.selected_exam_id,
                     ) && (
                       <button
+                        className="secondary"
                         onClick={() =>
                           action(() =>
                             api("/registrations", "POST", {
@@ -891,104 +927,103 @@ export function Workspace({ user, navigate }) {
                         Complete selected exam registration
                       </button>
                     )}
-                  <button
-                    className="secondary"
-                    onClick={() => navigate("/exam")}
-                  >
-                    Open examination portal →
-                  </button>
                 </>
               )
             ) : null}
-            {columns[view] && (
-              <section className="panel records">
-                <div className="table-toolbar">
-                  <label>
-                    Search records
-                    <input
-                      type="search"
-                      defaultValue={search}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          setSearch(e.currentTarget.value);
-                          setPage(1);
-                        }
-                      }}
-                      placeholder="Type and press Enter"
-                    />
-                  </label>
-                  {view === "Questions" && (
+            {user.role === "candidate" &&
+              ["Hall tickets", "Results"].includes(view) && (
+                <CandidateRecords rows={rows} mode={view} />
+              )}
+            {columns[view] &&
+              !(user.role === "candidate" && view === "Results") && (
+                <section className="panel records">
+                  <div className="table-toolbar">
                     <label>
-                      Examination
-                      <select
-                        value={selected}
-                        onChange={(e) => setSelected(e.target.value)}
-                      >
-                        <option value="">Choose examination</option>
-                        {catalog.exams.map((e) => (
-                          <option value={e.id} key={e.id}>
-                            {e.name}
-                          </option>
-                        ))}
-                      </select>
+                      Search records
+                      <input
+                        type="search"
+                        defaultValue={search}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            setSearch(e.currentTarget.value);
+                            setPage(1);
+                          }
+                        }}
+                        placeholder="Type and press Enter"
+                      />
                     </label>
-                  )}
-                  {view === "Computers" && (
-                    <label>
-                      Center
-                      <select
-                        value={selected}
-                        onChange={(e) => setSelected(e.target.value)}
-                      >
-                        <option value="">All centers</option>
-                        {catalog.centers.map((c) => (
-                          <option value={c.id} key={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                </div>
-                {view === "Registrations" && (
-                  <p className="table-hint">
-                    Close registration before allocation. Credentials are
-                    emailed immediately after allocation.
-                  </p>
-                )}
-                <Table
-                  rows={rows}
-                  columns={columns[view].map(column)}
-                  actions={actions}
-                />
-                {[
-                  "Examinations",
-                  "Registrations",
-                  "Users",
-                  "Admission",
-                  "Results",
-                  "Audit",
-                ].includes(view) && (
-                  <div className="pagination">
-                    <span>Page {page}</span>
-                    <button
-                      className="small-button secondary"
-                      disabled={page === 1}
-                      onClick={() => setPage(page - 1)}
-                    >
-                      Previous
-                    </button>
-                    <button
-                      className="small-button secondary"
-                      disabled={rows.length < 25}
-                      onClick={() => setPage(page + 1)}
-                    >
-                      Next
-                    </button>
+                    {view === "Questions" && (
+                      <label>
+                        Examination
+                        <select
+                          value={selected}
+                          onChange={(e) => setSelected(e.target.value)}
+                        >
+                          <option value="">Choose examination</option>
+                          {catalog.exams.map((e) => (
+                            <option value={e.id} key={e.id}>
+                              {e.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    {view === "Computers" && (
+                      <label>
+                        Center
+                        <select
+                          value={selected}
+                          onChange={(e) => setSelected(e.target.value)}
+                        >
+                          <option value="">All centers</option>
+                          {catalog.centers.map((c) => (
+                            <option value={c.id} key={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
                   </div>
-                )}
-              </section>
-            )}
+                  {view === "Registrations" && (
+                    <p className="table-hint">
+                      Close registration before allocation. Credentials are
+                      emailed immediately after allocation.
+                    </p>
+                  )}
+                  <Table
+                    rows={rows}
+                    columns={columns[view].map(column)}
+                    actions={actions}
+                  />
+                  {[
+                    "Examinations",
+                    "Registrations",
+                    "Users",
+                    "Admission",
+                    "Results",
+                    "Audit",
+                  ].includes(view) && (
+                    <div className="pagination">
+                      <span>Page {page}</span>
+                      <button
+                        className="small-button secondary"
+                        disabled={page === 1}
+                        onClick={() => setPage(page - 1)}
+                      >
+                        Previous
+                      </button>
+                      <button
+                        className="small-button secondary"
+                        disabled={rows.length < 25}
+                        onClick={() => setPage(page + 1)}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
+                </section>
+              )}
             {view === "Workstations" && (
               <section className="panel workstation-panel">
                 <div className="device-mark" aria-hidden="true">
@@ -1127,12 +1162,34 @@ export function Workspace({ user, navigate }) {
             )}
             {view === "Profile" && profile && (
               <section className="panel">
+                <div className="profile-editor-avatar">
+                  <Avatar gender={profile.gender} />
+                  <div>
+                    <h2>Your profile</h2>
+                    <p className="muted">
+                      Choose Male or Female below to update your dashboard
+                      illustration.
+                    </p>
+                  </div>
+                </div>
                 <p>
                   {profile.email} · {profile.phone}
                 </p>
                 <Form
                   fields={[
                     field("name", "Full name"),
+                    field(
+                      "gender",
+                      "Gender",
+                      "select",
+                      [
+                        { value: "male", label: "Male" },
+                        { value: "female", label: "Female" },
+                      ],
+                      {
+                        help: "Select the illustration shown on your dashboard.",
+                      },
+                    ),
                     field("address", "Address", "textarea"),
                   ]}
                   initial={profile}
@@ -1166,7 +1223,7 @@ export function Workspace({ user, navigate }) {
                 />
               </section>
             )}
-            {view === "Results" && (
+            {view === "Results" && user.role === "admin" && (
               <section className="panel results-publish">
                 <h2>Evaluate submitted attempts</h2>
                 <p>

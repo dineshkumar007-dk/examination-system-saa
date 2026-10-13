@@ -103,7 +103,7 @@ export async function authenticate(req, res, next) {
   try {
     if (!req.cookies.ep_session) fail(401, "Please sign in.");
     const [user] = await query(
-      "SELECT u.id,u.name,u.email,u.phone,u.role,u.status,u.center_id,u.email_verified_at,u.phone_verified_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>UTC_TIMESTAMP(3)",
+      "SELECT u.id,u.name,u.email,u.phone,u.role,u.status,u.gender,u.center_id,u.email_verified_at,u.phone_verified_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>UTC_TIMESTAMP(3)",
       [digest(req.cookies.ep_session)],
     );
     if (!user || user.status === "disabled")

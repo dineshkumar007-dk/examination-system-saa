@@ -163,11 +163,18 @@ router.patch("/profile", async (req, res) => {
     .object({
       name: z.string().trim().min(2).max(120),
       address: z.string().trim().min(5).max(500).optional(),
+      gender: z.enum(["male", "female"]).optional(),
     })
     .strict()
     .parse(req.body);
   await transaction(async (c) => {
     await query("UPDATE users SET name=? WHERE id=?", [d.name, req.user.id], c);
+    if (d.gender)
+      await query(
+        "UPDATE users SET gender=? WHERE id=?",
+        [d.gender, req.user.id],
+        c,
+      );
     if (d.address && req.user.role === "candidate")
       await query(
         "UPDATE students SET address=? WHERE user_id=?",

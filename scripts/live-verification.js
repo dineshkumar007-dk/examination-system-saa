@@ -23,6 +23,9 @@ try {
     email: required("LIVE_TEST_EMAIL"),
     phone: required("LIVE_TEST_PHONE"),
     dob: "2000-01-01",
+    gender: (await input.question("Gender for test account (male/female): "))
+      .trim()
+      .toLowerCase(),
     address: "Provider integration test account",
     password: secret,
     confirmPassword: secret,

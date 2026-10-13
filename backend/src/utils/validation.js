@@ -51,6 +51,7 @@ export const signup = z
         "Date of birth cannot be in the future",
       ),
     address: z.string().trim().min(5).max(500),
+    gender: z.enum(["male", "female"]),
     examId: id.optional(),
   })
   .strict()

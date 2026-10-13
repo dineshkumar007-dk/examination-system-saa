@@ -2,6 +2,10 @@
 
 EXAMPRO conducts centralized computer-based examinations at authorized centers. It connects candidate registration, verified email, center and slot allocation, invigilator admission, assigned workstations, saved examination responses, and results that remain private until publication.
 
+The React portal uses a pastel dashboard with exam cards, hall-ticket and result views, an examination calendar, and profile illustrations. New candidate registration requires a Male/Female choice; the stored choice selects the matching original SVG illustration. Existing accounts retain a neutral avatar until they choose in Settings. Gender can be edited in the candidate profile and is never inferred from a name. Dashboard schedules, tasks, counts and activity use the authenticated candidate's saved registrations; empty accounts show empty states rather than example examinations.
+
+Apply migration `005_profile_gender.sql` with `npm run db:migrate` before deploying this version. It adds a nullable column without assigning gender to existing users. The migration has been applied to the configured managed database.
+
 This is a separate project. No previous application is imported or modified. Production uses managed MySQL, real SMTP email. Payment is an explicitly labeled academic simulation; no money is collected.
 
 ## Structure
