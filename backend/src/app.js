@@ -52,6 +52,9 @@ app.use(
   express.static(path.join(root, "public"), {
     extensions: ["html"],
     maxAge: 0,
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith(".html")) res.set("Cache-Control", "no-store");
+    },
   }),
 );
 app.use((req, res) =>

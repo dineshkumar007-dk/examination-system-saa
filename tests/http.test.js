@@ -16,6 +16,8 @@ test("public pages and Bootstrap assets serve with security headers", async () =
     const r = await request(app).get(path);
     assert.equal(r.status, 200);
     assert.ok(r.headers["x-content-type-options"]);
+    if (!path.startsWith("/assets/"))
+      assert.equal(r.headers["cache-control"], "no-store");
   }
   const r = await request(app).get("/");
   assert.match(r.headers["content-security-policy"], /frame-ancestors 'none'/);
