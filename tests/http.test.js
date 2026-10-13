@@ -9,6 +9,7 @@ test("public pages and Bootstrap assets serve with security headers", async () =
     "/",
     "/login",
     "/invigilator-login",
+    "/admin-login",
     "/signup",
     "/exam",
     "/assets/bootstrap/css/bootstrap.min.css",

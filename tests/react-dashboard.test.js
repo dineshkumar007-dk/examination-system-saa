@@ -11,6 +11,18 @@ test("React dashboard uses selected illustrations and keeps unpublished scores p
   });
   try {
     const { Avatar } = await server.ssrLoadModule("/src/illustrations.jsx");
+    const { LoginPage } = await server.ssrLoadModule("/src/login-page.jsx");
+    const login = renderToStaticMarkup(
+      React.createElement(LoginPage, {
+        role: "admin",
+        login: () => {},
+        navigate: () => {},
+      }),
+    );
+    assert.match(login, /Exams,/);
+    assert.match(login, /Sign in as admin/);
+    assert.match(login, /Administrator/);
+    assert.doesNotMatch(login, /Examiner|Continue with Google/);
     const { CandidateDashboard, CandidateRecords } = await server.ssrLoadModule(
       "/src/candidate-dashboard.jsx",
     );

@@ -37,7 +37,6 @@ export const home = (role) =>
     candidate: "/dashboard",
     admin: "/manage",
     invigilator: "/invigilator",
-    examiner: "/examiner",
   })[role] || "/login";
 export const dateText = (value) =>
   value

@@ -78,6 +78,7 @@ router.get("/examinations", async (req, res) => {
 });
 router.post("/auth/signup", throttle("signup", 5, 3600), controllers.signUp);
 router.post("/auth/login", throttle("login", 10), controllers.logIn);
+router.post("/auth/admin-login", throttle("login", 10), controllers.adminLogIn);
 router.post(
   "/auth/invigilator-login",
   throttle("login", 10),
@@ -332,19 +333,15 @@ router.get("/manage/overview", roles("admin"), async (req, res) => {
   );
   res.json(row);
 });
-router.get(
-  "/manage/examinations",
-  roles("admin", "examiner"),
-  async (req, res) => {
-    const p = paging(req);
-    res.json(
-      await query(
-        "SELECT * FROM examinations WHERE deleted_at IS NULL AND name LIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
-        [`%${p.search}%`, p.limit, p.offset],
-      ),
-    );
-  },
-);
+router.get("/manage/examinations", roles("admin"), async (req, res) => {
+  const p = paging(req);
+  res.json(
+    await query(
+      "SELECT * FROM examinations WHERE deleted_at IS NULL AND name LIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+      [`%${p.search}%`, p.limit, p.offset],
+    ),
+  );
+});
 router.post("/manage/examinations", roles("admin"), async (req, res) => {
   const d = examInput.parse(req.body),
     examId = randomUUID();
@@ -695,7 +692,7 @@ router.patch("/manage/users/:id", roles("admin"), async (req, res) => {
   const d = z
       .object({
         status: z.enum(["active", "disabled"]),
-        role: z.enum(["candidate", "invigilator", "examiner"]),
+        role: z.enum(["candidate", "invigilator"]),
         centerId: id.nullable(),
       })
       .strict()
@@ -743,59 +740,48 @@ router.delete("/manage/users/:id", roles("admin"), async (req, res) => {
       : "User deleted from the database. The email can be used for a new account.",
   });
 });
-router.get(
-  "/manage/questions",
-  roles("admin", "examiner"),
-  async (req, res) => {
-    const examId = id.parse(req.query.examId);
-    const rows = await query(
-      "SELECT q.*,k.correct_answer,k.tolerance FROM questions q JOIN answer_keys k ON k.question_id=q.id WHERE q.exam_id=? ORDER BY position LIMIT 500",
-      [examId],
+router.get("/manage/questions", roles("admin"), async (req, res) => {
+  const examId = id.parse(req.query.examId);
+  const rows = await query(
+    "SELECT q.*,k.correct_answer,k.tolerance FROM questions q JOIN answer_keys k ON k.question_id=q.id WHERE q.exam_id=? ORDER BY position LIMIT 500",
+    [examId],
+  );
+  for (const q of rows)
+    q.options = await query(
+      "SELECT option_id AS id,option_text AS text FROM question_options WHERE question_id=?",
+      [q.id],
     );
-    for (const q of rows)
-      q.options = await query(
-        "SELECT option_id AS id,option_text AS text FROM question_options WHERE question_id=?",
-        [q.id],
-      );
-    res.json(rows);
-  },
-);
-router.post("/manage/questions", roles("admin", "examiner"), async (req, res) =>
+  res.json(rows);
+});
+router.post("/manage/questions", roles("admin"), async (req, res) =>
   res
     .status(201)
     .json(await admin.saveQuestion(req.user.id, questionInput.parse(req.body))),
 );
-router.put(
-  "/manage/questions/:id",
-  roles("admin", "examiner"),
-  async (req, res) =>
-    res.json(
-      await admin.saveQuestion(
-        req.user.id,
-        questionInput.parse(req.body),
-        id.parse(req.params.id),
-      ),
+router.put("/manage/questions/:id", roles("admin"), async (req, res) =>
+  res.json(
+    await admin.saveQuestion(
+      req.user.id,
+      questionInput.parse(req.body),
+      id.parse(req.params.id),
     ),
+  ),
 );
-router.delete(
-  "/manage/questions/:id",
-  roles("admin", "examiner"),
-  async (req, res) => {
-    const questionId = id.parse(req.params.id);
-    await transaction(async (c) => {
-      const [q] = await query(
-        "SELECT q.id,e.status FROM questions q JOIN examinations e ON e.id=q.exam_id WHERE q.id=? FOR UPDATE",
-        [questionId],
-        c,
-      );
-      if (!q || ["active", "completed"].includes(q.status))
-        fail(409, "This question is locked.");
-      await query("DELETE FROM questions WHERE id=?", [questionId], c);
-      await admin.audit(req.user.id, "question.delete", questionId, c);
-    });
-    res.json({ message: "Question deleted." });
-  },
-);
+router.delete("/manage/questions/:id", roles("admin"), async (req, res) => {
+  const questionId = id.parse(req.params.id);
+  await transaction(async (c) => {
+    const [q] = await query(
+      "SELECT q.id,e.status FROM questions q JOIN examinations e ON e.id=q.exam_id WHERE q.id=? FOR UPDATE",
+      [questionId],
+      c,
+    );
+    if (!q || ["active", "completed"].includes(q.status))
+      fail(409, "This question is locked.");
+    await query("DELETE FROM questions WHERE id=?", [questionId], c);
+    await admin.audit(req.user.id, "question.delete", questionId, c);
+  });
+  res.json({ message: "Question deleted." });
+});
 router.get(
   "/invigilator/candidates",
   roles("admin", "invigilator"),

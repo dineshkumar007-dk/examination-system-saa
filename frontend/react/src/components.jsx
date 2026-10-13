@@ -7,7 +7,7 @@ export function Notice({ message }) {
     </div>
   ) : null;
 }
-export function Password({ name, label, value, onChange }) {
+export function Password({ name, label, value, onChange, placeholder }) {
   const [show, setShow] = useState(false);
   return (
     <label className="field">
@@ -17,6 +17,7 @@ export function Password({ name, label, value, onChange }) {
           name={name}
           type={show ? "text" : "password"}
           autoComplete="current-password"
+          placeholder={placeholder}
           required
           value={value || ""}
           onChange={onChange}

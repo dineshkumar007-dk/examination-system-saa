@@ -50,6 +50,7 @@ export async function login(identity, password, requiredRole) {
   const valid = await bcrypt.compare(password, user?.password_hash || fallback);
   if (
     !user ||
+    user.role === "examiner" ||
     !valid ||
     (requiredRole && user.role !== requiredRole) ||
     user.status !== "active" ||

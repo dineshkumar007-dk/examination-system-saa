@@ -5,13 +5,14 @@ import { Form, field, Notice } from "./components.jsx";
 import { Workspace } from "./workspace.jsx";
 import { Exam } from "./exam.jsx";
 import { Avatar, Icon } from "./illustrations.jsx";
+import { LoginPage } from "./login-page.jsx";
 import "./styles.css";
 import "./pastel.css";
+import "./login.css";
 const protectedPaths = [
   "/manage",
   "/dashboard",
   "/invigilator",
-  "/examiner",
   "/exam",
   "/verify",
 ];
@@ -21,7 +22,7 @@ function App() {
     [loading, setLoading] = useState(true),
     [notice, setNotice] = useState(null);
   const navigate = (url, replace = false) => {
-    if (url === "/login") {
+    if (["/login", "/admin-login", "/invigilator-login"].includes(url)) {
       setAdminAccess(null);
       setUser(null);
     }
@@ -39,7 +40,16 @@ function App() {
           if (u.status === "pending" && location.pathname !== "/verify")
             navigate("/verify", true);
         })
-        .catch(() => navigate("/login", true))
+        .catch(() =>
+          navigate(
+            location.pathname === "/manage"
+              ? "/admin-login"
+              : location.pathname === "/invigilator"
+                ? "/invigilator-login"
+                : "/login",
+            true,
+          ),
+        )
         .finally(() => setLoading(false));
     } else setLoading(false);
     return () => window.removeEventListener("popstate", pop);
@@ -51,9 +61,13 @@ function App() {
     if (protectedPaths.includes(url) && !user) navigate("/login");
     else navigate(url);
   };
-  const login = async (data) => {
+  const login = async (data, role = "candidate") => {
     const u = await api(
-      path === "/invigilator-login" ? "/auth/invigilator-login" : "/auth/login",
+      role === "admin"
+        ? "/auth/admin-login"
+        : role === "invigilator"
+          ? "/auth/invigilator-login"
+          : "/auth/login",
       "POST",
       data,
     );
@@ -74,7 +88,6 @@ function App() {
     manage: "admin",
     dashboard: "candidate",
     invigilator: "invigilator",
-    examiner: "examiner",
     exam: "candidate",
   }[path.slice(1)];
   useEffect(() => {
@@ -260,6 +273,21 @@ function Landing({ navigate }) {
 }
 function AuthPage({ path, login, navigate, setUser, setNotice, notice }) {
   const [illustrationGender, setIllustrationGender] = useState(null);
+  if (["/login", "/invigilator-login", "/admin-login"].includes(path))
+    return (
+      <LoginPage
+        key={path}
+        role={
+          path === "/admin-login"
+            ? "admin"
+            : path === "/invigilator-login"
+              ? "invigilator"
+              : "candidate"
+        }
+        login={login}
+        navigate={navigate}
+      />
+    );
   const signup = path === "/signup",
     invigilator = path === "/invigilator-login";
   let title = "Welcome back",

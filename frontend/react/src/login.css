@@ -1,0 +1,328 @@
+.signin-page {
+  max-width: 1080px;
+  margin: 38px auto 48px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border: 1px solid #e8e2f0;
+  border-radius: 18px;
+  overflow: hidden;
+  background: white;
+  box-shadow: 0 10px 45px #9075ac06;
+  min-height: 575px;
+}
+.signin-story {
+  position: relative;
+  padding: 65px 60px 60px;
+  background: linear-gradient(120deg, #f7f2fd, #f3edfc);
+  overflow: hidden;
+}
+.signin-story .eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  color: #93869f;
+  margin: 0 0 15px;
+}
+.signin-story h2 {
+  font-size: 47px;
+  line-height: 1.1;
+  font-weight: 750;
+  margin: 0 0 20px;
+  letter-spacing: -0.045em;
+}
+.signin-story h2 span {
+  color: #773b9e;
+}
+.signin-story-intro {
+  color: #857990;
+  font-size: 16px;
+  line-height: 1.5;
+  margin: 0;
+}
+.signin-features {
+  display: grid;
+  gap: 23px;
+  margin-top: 35px;
+  position: relative;
+  z-index: 1;
+}
+.signin-features > div {
+  display: flex;
+  align-items: center;
+  gap: 17px;
+}
+.signin-features > div > span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 51px;
+  height: 51px;
+  border-radius: 12px;
+  background: #eee1fa;
+  color: #9864b4;
+  flex-shrink: 0;
+}
+.signin-features h3 {
+  font-size: 14px;
+  margin: 0 0 5px;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+.signin-features p {
+  font-size: 12px;
+  color: #9a8fa5;
+  margin: 0;
+}
+.signin-mosaic {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 96px;
+  display: grid;
+  grid-template-columns: repeat(4, 24px);
+  opacity: 0.65;
+}
+.signin-mosaic i {
+  height: 24px;
+}
+.signin-mosaic i:nth-child(4n + 1),
+.signin-mosaic i:nth-child(4n + 3) {
+  background: #e1d0ef;
+}
+.signin-mosaic i:nth-child(4n + 2) {
+  background: #efe3f9;
+}
+.signin-mosaic i:nth-child(4),
+.signin-mosaic i:nth-child(7),
+.signin-mosaic i:nth-child(8),
+.signin-mosaic i:nth-child(12) {
+  opacity: 0;
+}
+.signin-panel {
+  padding: 43px 48px 38px;
+}
+.signin-panel > .eyebrow {
+  color: #8d8398;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  margin: 0 0 12px;
+}
+.signin-panel h1 {
+  font-size: 28px;
+  letter-spacing: -0.025em;
+  margin: 0 0 5px;
+  line-height: 1.25;
+}
+.signin-panel h1 span {
+  color: #783a9d;
+}
+.signin-intro {
+  color: #8c8296;
+  font-size: 13px;
+  margin: 0 0 23px;
+  line-height: 1.5;
+}
+.signin-roles {
+  display: flex;
+  border: 1px solid #e9e3ef;
+  border-radius: 8px;
+  margin-bottom: 25px;
+  overflow: hidden;
+}
+.signin-roles button {
+  flex: 1;
+  padding: 10px 5px;
+  border: 0;
+  border-right: 1px solid #eee8f3;
+  color: #766a82;
+  background: #fff;
+  border-radius: 0;
+  font-size: 11px;
+  font-weight: 500;
+}
+.signin-roles button:last-child {
+  border: 0;
+}
+.signin-roles button.active {
+  background: #f0e7f9;
+  color: #793b9a;
+  font-weight: 650;
+}
+.signin-roles button:hover {
+  background: #f5eefb;
+}
+.signin-panel .field {
+  color: #322a3f;
+  font-size: 12px;
+  font-weight: 500;
+}
+.signin-identity {
+  position: relative;
+}
+.signin-identity svg {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  transform: translateY(-50%);
+  color: #9c91a8;
+}
+.signin-identity input {
+  padding-left: 40px;
+}
+.signin-panel input {
+  height: 44px;
+  font-size: 12px;
+  border: 1px solid #e4deeb;
+}
+.signin-panel input::placeholder {
+  color: #aca2b4;
+}
+.signin-password {
+  position: relative;
+  margin-top: 20px;
+}
+.signin-password > svg {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  color: #9c91a8;
+  z-index: 1;
+  pointer-events: none;
+}
+.signin-password input {
+  padding-left: 40px;
+}
+.signin-password .password button {
+  color: #9870ae;
+  font-size: 11px;
+}
+.signin-recovery {
+  display: flex;
+  justify-content: flex-end;
+  margin: 13px 0 20px;
+}
+.signin-recovery button {
+  font-size: 11px;
+}
+.signin-submit {
+  width: 100%;
+  height: 45px;
+  background: #8852ab;
+  border-color: #8852ab;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 550;
+}
+.signin-submit:hover {
+  background: #76419a;
+}
+.signin-account-links {
+  text-align: center;
+  border-top: 1px solid #eee7f5;
+  margin-top: 28px;
+  padding-top: 22px;
+  font-size: 11px;
+  color: #9c90a7;
+}
+.signin-account-links p {
+  margin: 0 0 15px;
+}
+.signin-account-links button {
+  font-size: 11px;
+  color: #87519f;
+}
+.signin-account-links > button {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.signin-admin-note {
+  font-size: 11px;
+  line-height: 1.6;
+  color: #95819f;
+  background: #faf6fd;
+  padding: 12px;
+  border-radius: 9px;
+  margin: 17px 0 0;
+}
+.signin-page button:focus-visible {
+  outline: 2px solid #ab7bcb;
+  outline-offset: 2px;
+}
+@media (max-width: 1120px) {
+  .signin-page {
+    margin: 30px 25px;
+  }
+  .signin-story {
+    padding: 55px 40px;
+  }
+  .signin-panel {
+    padding: 40px 34px;
+  }
+}
+@media (max-width: 760px) {
+  .signin-page {
+    grid-template-columns: 0.85fr 1.15fr;
+    margin: 20px 15px;
+  }
+  .signin-story {
+    padding: 40px 25px;
+  }
+  .signin-story h2 {
+    font-size: 35px;
+  }
+  .signin-story-intro {
+    font-size: 13px;
+  }
+  .signin-panel {
+    padding: 35px 24px;
+  }
+  .signin-panel h1 {
+    font-size: 24px;
+  }
+  .signin-features > div {
+    gap: 12px;
+  }
+  .signin-features h3 {
+    font-size: 12px;
+  }
+  .signin-features p {
+    font-size: 11px;
+  }
+  .signin-features > div > span {
+    width: 40px;
+    height: 40px;
+  }
+  .desktop-break {
+    display: none;
+  }
+}
+@media (max-width: 570px) {
+  .signin-page {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+  .signin-story {
+    padding: 28px;
+  }
+  .signin-story h2 {
+    font-size: 36px;
+    margin-bottom: 12px;
+  }
+  .signin-story-intro {
+    max-width: 300px;
+  }
+  .signin-features {
+    display: none;
+  }
+  .signin-panel {
+    padding: 29px 25px;
+  }
+  .signin-mosaic {
+    left: auto;
+    right: 0;
+    width: 72px;
+    grid-template-columns: repeat(3, 24px);
+  }
+  .signin-panel h1 {
+    font-size: 27px;
+  }
+}

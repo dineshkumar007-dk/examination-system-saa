@@ -10,6 +10,8 @@ This is a separate project. No previous application is imported or modified. Pro
 
 ## Structure
 
+Login provides separate Candidate, Invigilator and Administrator tabs (`/login`, `/invigilator-login`, `/admin-login`). The server restricts each password sign-in to its selected role. Administrator tabs and reloads still require a fresh password sign-in. Question-paper authoring is admin-only; new staff creation supports invigilators. Apply migration `006_retire_examiner.sql` before deploying: it disables obsolete examiner accounts and revokes their sessions while retaining their records.
+
 ```text
 frontend/react/               React screens, shared forms, navy/white CSS
 frontend/                     Retained legacy frontend sources

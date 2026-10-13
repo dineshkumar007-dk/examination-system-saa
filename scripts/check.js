@@ -27,6 +27,7 @@ await build();
 const routes = [
   "login",
   "invigilator-login",
+  "admin-login",
   "signup",
   "resume",
   "forgot",
@@ -36,7 +37,6 @@ const routes = [
   "dashboard",
   "manage",
   "invigilator",
-  "examiner",
   "exam",
 ];
 for (const route of routes)

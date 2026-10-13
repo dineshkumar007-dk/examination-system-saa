@@ -106,7 +106,7 @@ export async function authenticate(req, res, next) {
       "SELECT u.id,u.name,u.email,u.phone,u.role,u.status,u.gender,u.center_id,u.email_verified_at,u.phone_verified_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>UTC_TIMESTAMP(3)",
       [digest(req.cookies.ep_session)],
     );
-    if (!user || user.status === "disabled")
+    if (!user || user.status === "disabled" || user.role === "examiner")
       fail(401, "Your session expired or your account is unavailable.");
     if (
       user.role === "admin" &&

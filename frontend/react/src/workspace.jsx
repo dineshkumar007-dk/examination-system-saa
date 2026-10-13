@@ -43,7 +43,6 @@ const menus = {
     "Notifications",
   ],
   invigilator: ["Admission", "Workstations"],
-  examiner: ["Questions", "Examinations"],
 };
 const transitions = {
   draft: ["draft", "open"],
@@ -83,7 +82,11 @@ const column = (k) => ({
     )
       ? dateText
       : ["status", "attendance", "role", "result_status"].includes(k)
-        ? (v) => <Status value={v} />
+        ? (v) => (
+            <Status
+              value={k === "role" && v === "examiner" ? "Retired staff" : v}
+            />
+          )
         : k === "active"
           ? (v) => <Status value={v ? "Active" : "Inactive"} />
           : undefined,
@@ -321,7 +324,7 @@ export function Workspace({ user, navigate }) {
       [
         field("name", "Full name"),
         field("email", "Email", "email"),
-        field("role", "Role", "select", choices(["invigilator", "examiner"])),
+        field("role", "Role", "select", choices(["invigilator"])),
         field(
           "centerId",
           "Assigned center",
@@ -344,12 +347,7 @@ export function Workspace({ user, navigate }) {
     open(
       "Access · " + r.name,
       [
-        field(
-          "role",
-          "Role",
-          "select",
-          choices(["candidate", "invigilator", "examiner"]),
-        ),
+        field("role", "Role", "select", choices(["candidate", "invigilator"])),
         field("status", "Status", "select", choices(["active", "disabled"])),
         field(
           "centerId",
@@ -359,7 +357,11 @@ export function Workspace({ user, navigate }) {
           { required: false, noBlank: true },
         ),
       ],
-      { ...r, centerId: r.center_id || "" },
+      {
+        ...r,
+        role: r.role === "examiner" ? "" : r.role,
+        centerId: r.center_id || "",
+      },
       (d) =>
         api("/manage/users/" + r.id, "PATCH", {
           ...d,
@@ -1166,10 +1168,6 @@ export function Workspace({ user, navigate }) {
                   <Avatar gender={profile.gender} />
                   <div>
                     <h2>Your profile</h2>
-                    <p className="muted">
-                      Choose Male or Female below to update your dashboard
-                      illustration.
-                    </p>
                   </div>
                 </div>
                 <p>
@@ -1186,9 +1184,7 @@ export function Workspace({ user, navigate }) {
                         { value: "male", label: "Male" },
                         { value: "female", label: "Female" },
                       ],
-                      {
-                        help: "Select the illustration shown on your dashboard.",
-                      },
+                      {},
                     ),
                     field("address", "Address", "textarea"),
                   ]}

@@ -42,7 +42,8 @@ const signIn = async (req, res, requiredRole) => {
       : {}),
   });
 };
-export const logIn = (req, res) => signIn(req, res);
+export const logIn = (req, res) => signIn(req, res, "candidate");
+export const adminLogIn = (req, res) => signIn(req, res, "admin");
 export const invigilatorLogIn = (req, res) => signIn(req, res, "invigilator");
 export const resumeVerification = async (req, res) => {
   const d = z
