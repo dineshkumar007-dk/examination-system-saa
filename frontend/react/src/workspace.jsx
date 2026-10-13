@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api, dateText, localDate } from "./api.js";
 import { Avatar, Icon } from "./illustrations.jsx";
+import logo from "./assets/exampro-logo.jpeg";
 import {
   CandidateDashboard,
   CandidateRecords,
@@ -787,9 +788,11 @@ export function Workspace({ user, navigate }) {
       <aside className="sidebar">
         <div className="sidebar-title">
           <div className="sidebar-brand">
-            <Icon name="cap" size={47} />
-            <strong>EXAMPRO</strong>
-            <p>Examination Portal</p>
+            <img
+              className="sidebar-logo"
+              src={logo}
+              alt="EXAMPRO Examination Portal logo"
+            />
           </div>
           <span className="eyebrow">{user.role} workspace</span>
           <strong>{user.name}</strong>

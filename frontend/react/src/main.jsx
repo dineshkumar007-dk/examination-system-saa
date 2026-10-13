@@ -4,7 +4,8 @@ import { api, home, setAdminAccess, dateText } from "./api.js";
 import { Form, field, Notice } from "./components.jsx";
 import { Workspace } from "./workspace.jsx";
 import { Exam } from "./exam.jsx";
-import { Avatar, Icon } from "./illustrations.jsx";
+import { Avatar } from "./illustrations.jsx";
+import logo from "./assets/exampro-logo.jpeg";
 import { LoginPage } from "./login-page.jsx";
 import "./styles.css";
 import "./pastel.css";
@@ -98,9 +99,11 @@ function App() {
     <>
       <header className="topbar">
         <a href="/" onClick={(e) => link(e, "/")} className="brand">
-          <span className="brand-symbol">
-            <Icon name="cap" size={29} />
-          </span>
+          <img
+            className="website-logo"
+            src={logo}
+            alt="EXAMPRO Examination Portal logo"
+          />
           <span>
             EXAMPRO<small>Examination services</small>
           </span>

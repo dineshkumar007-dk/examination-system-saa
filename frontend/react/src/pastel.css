@@ -1,4 +1,35 @@
 /* Pastel examination portal: original illustrations, quiet surfaces, readable data. */
+.website-logo {
+  display: block;
+  width: 76px;
+  height: 59px;
+  object-fit: contain;
+  border-radius: 7px;
+  flex-shrink: 0;
+}
+.sidebar-logo {
+  display: block;
+  width: 100%;
+  max-width: 185px;
+  height: auto;
+  margin: 0 auto;
+  border-radius: 12px;
+}
+@media (max-width: 720px) {
+  .sidebar-logo {
+    width: 85px;
+    margin: 0;
+  }
+}
+@media (max-width: 450px) {
+  .website-logo {
+    width: 59px;
+    height: 46px;
+  }
+  .brand {
+    gap: 8px;
+  }
+}
 :root {
   --navy: #773498;
   --blue: #77409a;
