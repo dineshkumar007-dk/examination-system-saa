@@ -49,7 +49,7 @@ app.use(
   }),
 );
 app.use(
-  express.static(path.join(root, "frontend"), {
+  express.static(path.join(root, "public"), {
     extensions: ["html"],
     maxAge: 0,
   }),

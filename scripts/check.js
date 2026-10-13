@@ -1,4 +1,5 @@
 import { readdir, copyFile, mkdir } from "node:fs/promises";
+import { build } from "vite";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 async function files(dir) {
@@ -21,11 +22,28 @@ for (const dir of ["backend", "frontend", "scripts", "tests"])
       process.exit(1);
     }
   }
-// Vercel serves public assets directly; source remains in frontend for development.
+// Build React into the known generated workspace directory before making route shells.
+await build();
+const routes = [
+  "login",
+  "invigilator-login",
+  "signup",
+  "resume",
+  "forgot",
+  "reset",
+  "verify",
+  "exam-setup",
+  "dashboard",
+  "manage",
+  "invigilator",
+  "examiner",
+  "exam",
+];
+for (const route of routes)
+  await copyFile("public/index.html", `public/${route}.html`);
+// Keep Bootstrap assets for existing integrations; React uses its own stylesheet.
 await mkdir("public/assets/bootstrap/css", { recursive: true });
 await mkdir("public/assets/bootstrap/js", { recursive: true });
-for (const file of await readdir("frontend"))
-  await copyFile(path.join("frontend", file), path.join("public", file));
 await copyFile(
   "node_modules/bootstrap/dist/css/bootstrap.min.css",
   "public/assets/bootstrap/css/bootstrap.min.css",
@@ -35,5 +53,5 @@ await copyFile(
   "public/assets/bootstrap/js/bootstrap.bundle.min.js",
 );
 console.log(
-  "JavaScript syntax checks passed; deployment static assets generated in public/.",
+  "JavaScript syntax checks passed; React production assets and route shells generated in public/.",
 );

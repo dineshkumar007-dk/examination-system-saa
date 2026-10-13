@@ -7,7 +7,9 @@ This is a separate project. No previous application is imported or modified. Pro
 ## Structure
 
 ```text
-frontend/                     HTML screens, Bootstrap, CSS, vanilla JS
+frontend/react/               React screens, shared forms, navy/white CSS
+frontend/                     Retained legacy frontend sources
+vite.config.js                React build and local API proxy
 backend/src/app.js            Express application and security headers
 backend/src/controllers/     Authentication request handlers
 backend/src/routes/          REST routes and role/ownership checks
@@ -24,7 +26,7 @@ app.js                       Vercel Express entry point
 vercel.json                  Build, static-page URLs, production headers
 ```
 
-Use Node.js **24 LTS** and npm. Node 22 supports the application, but the isolated module-mocking tests require a recent Node release with `--experimental-test-module-mocks` (Node 24 is verified here). No frontend bundler or TypeScript compiler is needed for this JavaScript stack. `npm run build` checks syntax and prepares actual deployment assets.
+Use Node.js **24 LTS** and npm (minimum supported runtime: 22.12). The isolated module-mocking tests require a recent Node release with `--experimental-test-module-mocks`; Node 24 is verified here. `npm run build` checks JavaScript syntax and bundles React with Vite into `public/`, including route shells for Express and Vercel.
 
 ## Run locally
 
@@ -42,6 +44,10 @@ npm.cmd run dev
 ```
 
 Open http://localhost:3000. Missing credentials produce a real setup error. There is no fallback database, fixed OTP, seeded user, or demo authentication. `npm run jobs` sends pending notifications and finalizes expired attempts during local development; arrange a recurring external invocation for deployed environments.
+
+After frontend edits, run `npm run build` to update the served assets. For React hot reload, run `npm run dev:ui` in another terminal and open the Vite URL. Its API proxy uses the backend at port 3000; set `APP_URL` to that Vite origin while using this development workflow. Keep the Vercel application preset as Express so the backend API remains deployed alongside the React assets.
+
+Administrators must enter their password again in every new tab and after every page reload. Login supplies a session-bound proof kept only in the current page's memory. The server requires that proof as well as the HttpOnly session cookie on authenticated admin requests. Normal React navigation within the signed-in page preserves access. Candidate and staff session behavior is unchanged.
 
 Generate **three independent secrets**, running this command separately for `APP_SECRET`, `DATA_ENCRYPTION_KEY`, and `CRON_SECRET`:
 
@@ -132,7 +138,7 @@ Vercel now supports [Express applications](https://vercel.com/docs/frameworks/ba
 3. Add production environment variables from the table, with `NODE_ENV=production`, runtime MySQL credentials and your exact HTTPS `APP_URL`. Omit bootstrap and test-only variables. Set the database/network allowlist according to your managed-provider and Vercel networking options; do not disable TLS.
 4. Deploy, attach your canonical domain, confirm HTTPS, update `APP_URL` if necessary and redeploy. Preview domains require separate configuration and databases if used; the origin check intentionally rejects a preview domain pointed at production's canonical origin.
 5. Configure an authenticated scheduler to call **GET `/api/jobs` every minute** with `Authorization: Bearer <CRON_SECRET>`. Keep the secret in the scheduler's secure configuration. The checked-in Vercel config does not require a paid cron feature. On a Vercel plan supporting minute-level jobs, merge the `crons` field from `vercel.cron.example.json` into `vercel.json` and redeploy. [Vercel's cron documentation](https://vercel.com/docs/cron-jobs/manage-cron-jobs) states that Hobby cron is limited to daily execution; use an external scheduler on that plan. Alternatively run `npm run jobs` every minute on an always-on worker, using the same managed database. Never use a process-local timer inside a serverless function as a reliable job scheduler.
-6. Test `/api/health` returns `status: ok`, open the landing page, download a Bootstrap asset, and verify the jobs endpoint rejects an absent/wrong bearer secret. Ensure queued email notifications reach `sent`.
+6. Test `/api/health` returns `status: ok`, open the React landing page, verify the generated JavaScript/CSS loads, and verify the jobs endpoint rejects an absent/wrong bearer secret. Ensure queued email notifications reach `sent`. Sign in as admin, then open `/manage` in another tab and reload the original: both must return to sign-in.
 7. Redeploy with unchanged database connection and encryption keys. Your users, allocations, sessions and saved answers persist in managed MySQL. Do not rerun initialization against an empty temporary filesystem. Use versioned migrations and tested backups for future changes.
 
 For larger candidate counts, measure latency and concurrent connection limits, batch grading/announcements and scale the worker/database before opening a high-volume examination. This implementation uses synchronous grading and a small bounded outbox worker; it is not a claim of audited national-exam capacity.

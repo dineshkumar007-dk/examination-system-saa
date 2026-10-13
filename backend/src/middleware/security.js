@@ -1,6 +1,7 @@
 import { query, transaction } from "../config/database.js";
 import { appUrl } from "../config/env.js";
 import { digest, token, equal, fail } from "../utils/security.js";
+import { validAdminAccess } from "./admin-access.js";
 export const cookieOptions = () => ({
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
@@ -96,6 +97,7 @@ export async function createSession(userId, res, connection) {
     connection,
   );
   res.cookie("ep_session", value, { ...cookieOptions(), maxAge: 8 * 3600000 });
+  return value;
 }
 export async function authenticate(req, res, next) {
   try {
@@ -106,6 +108,18 @@ export async function authenticate(req, res, next) {
     );
     if (!user || user.status === "disabled")
       fail(401, "Your session expired or your account is unavailable.");
+    if (
+      user.role === "admin" &&
+      !validAdminAccess(
+        req.get("X-Admin-Access"),
+        user.id,
+        req.cookies.ep_session,
+      )
+    )
+      fail(
+        401,
+        "Administrator access requires a fresh password sign-in in this tab.",
+      );
     req.user = user;
     next();
   } catch (e) {

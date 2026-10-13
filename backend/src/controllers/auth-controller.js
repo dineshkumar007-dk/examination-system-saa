@@ -11,6 +11,7 @@ import { digest, fail } from "../utils/security.js";
 import { createSession, cookieOptions } from "../middleware/security.js";
 import * as auth from "../services/auth.js";
 import * as admin from "../services/administration.js";
+import { issueAdminAccess } from "../middleware/admin-access.js";
 export const signUp = async (req, res) => {
   const d = signupSchema.parse(req.body);
   const userId = await auth.signup(d);
@@ -33,8 +34,13 @@ const signIn = async (req, res, requiredRole) => {
     await query("DELETE FROM sessions WHERE token_hash=?", [
       digest(req.cookies.ep_session),
     ]);
-  await createSession(user.id, res);
-  res.json(auth.publicUser(user));
+  const sessionToken = await createSession(user.id, res);
+  res.json({
+    ...auth.publicUser(user),
+    ...(user.role === "admin"
+      ? { adminAccess: issueAdminAccess(user.id, sessionToken) }
+      : {}),
+  });
 };
 export const logIn = (req, res) => signIn(req, res);
 export const invigilatorLogIn = (req, res) => signIn(req, res, "invigilator");
