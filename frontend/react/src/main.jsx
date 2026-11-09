@@ -195,7 +195,7 @@ function App() {
               }}
             />
           ) : path === "/exam" ? (
-            <Exam />
+            <Exam navigate={navigate} />
           ) : path === "/examiner" && user?.role === "examiner" ? (
             <Examiner user={user} navigate={navigate} />
           ) : allowed && user?.role === allowed ? (

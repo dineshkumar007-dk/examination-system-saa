@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { api } from "./api.js";
 import { createExamClock } from "./exam-clock.js";
 import { Form, field, Notice, useConfirm } from "./components.jsx";
-export function Exam() {
+export function Exam({ navigate }) {
   const [attempt, setAttempt] = useState(null),
     [answers, setAnswers] = useState({}),
     [index, setIndex] = useState(0),
@@ -159,9 +159,9 @@ export function Exam() {
         <p>
           The examination authority will publish your results after evaluation.
         </p>
-        <a className="button" href="/dashboard">
+        <button onClick={() => navigate("/dashboard")}>
           Return to dashboard →
-        </a>
+        </button>
       </main>
     );
   if (!attempt)
