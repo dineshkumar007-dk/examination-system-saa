@@ -31,7 +31,13 @@ app.use(
   }),
 );
 app.use(cookieParser());
-app.use(express.json({ limit: "32kb" }));
+const smallJson = express.json({ limit: "32kb" }),
+  paperJson = express.json({ limit: "2mb" });
+app.use((req, res, next) => {
+  if (/^\/api\/examiner\/papers\/[^/]+$/.test(req.path) && req.method === "PUT")
+    return paperJson(req, res, next);
+  return smallJson(req, res, next);
+});
 app.use(
   "/api",
   (req, res, next) => {

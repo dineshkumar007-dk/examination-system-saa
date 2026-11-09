@@ -29,6 +29,20 @@ export async function deleteUser(actor, userId) {
       c,
     );
     await query("DELETE FROM sessions WHERE user_id=?", [userId], c);
+    let paperCount = 0;
+    if (user.role === "examiner") {
+      const [count] = await query(
+        "SELECT COUNT(*) AS n FROM question_papers WHERE examiner_id=?",
+        [userId],
+        c,
+      );
+      paperCount = count.n;
+      await query(
+        "DELETE FROM examiner_assignments WHERE examiner_id=?",
+        [userId],
+        c,
+      );
+    }
     await query(
       "DELETE FROM workstation_sessions WHERE issued_by=?",
       [userId],
@@ -49,7 +63,7 @@ export async function deleteUser(actor, userId) {
       [userId],
       c,
     );
-    if (n) {
+    if (n || paperCount) {
       await query(
         "UPDATE users SET status='disabled',deleted_at=UTC_TIMESTAMP(3),email=CONCAT('deleted-',id,'@deleted.invalid'),phone=NULL WHERE id=?",
         [userId],
@@ -71,7 +85,7 @@ export async function deleteUser(actor, userId) {
       await query("DELETE FROM users WHERE id=?", [userId], c);
     }
     await audit(actor, "user.delete", userId, c);
-    return { retainedExamRecords: !!n };
+    return { retainedExamRecords: !!(n || paperCount) };
   });
 }
 export async function deleteExamination(actor, examId) {

@@ -1,0 +1,53 @@
+{
+  "mode": "after",
+  "recordedAt": "2026-11-09T07:32:03.095Z",
+  "samples": 3,
+  "timings": {
+    "databaseRoundTrip": {
+      "ms": [
+        311.44,
+        30.54,
+        29.71
+      ],
+      "p50ms": 30.54
+    },
+    "passwordLogin": {
+      "ms": [
+        357.69,
+        301.19,
+        311.56
+      ],
+      "p50ms": 311.56
+    },
+    "adminOverviewData": {
+      "ms": [
+        110.38,
+        30.18,
+        31.96
+      ],
+      "p50ms": 31.96
+    }
+  },
+  "bundles": [
+    {
+      "file": "exam-Dx6HqVZo.js",
+      "bytes": 7300,
+      "gzipBytes": 2659
+    },
+    {
+      "file": "examiner-Dy015yP0.js",
+      "bytes": 15728,
+      "gzipBytes": 4700
+    },
+    {
+      "file": "index-Cp3vhkbf.js",
+      "bytes": 249590,
+      "gzipBytes": 77267
+    },
+    {
+      "file": "workspace-BHFpRnMI.js",
+      "bytes": 35220,
+      "gzipBytes": 9660
+    }
+  ]
+}

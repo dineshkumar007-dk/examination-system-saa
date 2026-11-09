@@ -1,9 +1,16 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, lazy, Suspense, Component } from "react";
 import { createRoot } from "react-dom/client";
 import { api, home, setAdminAccess, dateText } from "./api.js";
 import { Form, field, Notice } from "./components.jsx";
-import { Workspace } from "./workspace.jsx";
-import { Exam } from "./exam.jsx";
+const Workspace = lazy(() =>
+  import("./workspace.jsx").then((m) => ({ default: m.Workspace })),
+);
+const Exam = lazy(() =>
+  import("./exam.jsx").then((m) => ({ default: m.Exam })),
+);
+const Examiner = lazy(() =>
+  import("./examiner.jsx").then((m) => ({ default: m.Examiner })),
+);
 import { Avatar } from "./illustrations.jsx";
 import logo from "./assets/exampro-logo.jpeg";
 import { LoginPage } from "./login-page.jsx";
@@ -14,16 +21,44 @@ const protectedPaths = [
   "/manage",
   "/dashboard",
   "/invigilator",
+  "/examiner",
   "/exam",
   "/verify",
 ];
+class RouteBoundary extends Component {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    return this.state.failed ? (
+      <main className="single-panel">
+        <h1>This page could not load.</h1>
+        <p>
+          Your saved work remains on the server. Check your connection, then
+          reopen this page.
+        </p>
+        <button onClick={() => location.reload()}>Reload page</button>
+      </main>
+    ) : (
+      this.props.children
+    );
+  }
+}
 function App() {
   const [path, setPath] = useState(location.pathname.replace(/\/$/, "") || "/"),
     [user, setUser] = useState(null),
     [loading, setLoading] = useState(true),
     [notice, setNotice] = useState(null);
   const navigate = (url, replace = false) => {
-    if (["/login", "/admin-login", "/invigilator-login"].includes(url)) {
+    if (
+      [
+        "/login",
+        "/admin-login",
+        "/invigilator-login",
+        "/examiner-login",
+      ].includes(url)
+    ) {
       setAdminAccess(null);
       setUser(null);
     }
@@ -47,7 +82,9 @@ function App() {
               ? "/admin-login"
               : location.pathname === "/invigilator"
                 ? "/invigilator-login"
-                : "/login",
+                : location.pathname === "/examiner"
+                  ? "/examiner-login"
+                  : "/login",
             true,
           ),
         )
@@ -66,9 +103,11 @@ function App() {
     const u = await api(
       role === "admin"
         ? "/auth/admin-login"
-        : role === "invigilator"
-          ? "/auth/invigilator-login"
-          : "/auth/login",
+        : role === "examiner"
+          ? "/auth/examiner-login"
+          : role === "invigilator"
+            ? "/auth/invigilator-login"
+            : "/auth/login",
       "POST",
       data,
     );
@@ -89,6 +128,7 @@ function App() {
     manage: "admin",
     dashboard: "candidate",
     invigilator: "invigilator",
+    examiner: "examiner",
     exam: "candidate",
   }[path.slice(1)];
   useEffect(() => {
@@ -126,41 +166,53 @@ function App() {
           )}
         </nav>
       </header>
-      {loading ? (
-        <main className="page">
-          <p role="status">Opening your portal…</p>
-        </main>
-      ) : path === "/" ? (
-        <Landing navigate={navigate} />
-      ) : protectedPaths.includes(path) && !user ? (
-        <main className="page">
-          <p>Sign in to continue.</p>
-          <button onClick={() => navigate("/login")}>Sign in</button>
-        </main>
-      ) : path === "/verify" ? (
-        <Verify
-          user={user}
-          onVerified={async () => {
-            const u = await api("/me");
-            setUser(u);
-            navigate(home(u.role));
-          }}
-        />
-      ) : path === "/exam" ? (
-        <Exam />
-      ) : allowed && user?.role === allowed ? (
-        <Workspace user={user} navigate={navigate} />
-      ) : (
-        <AuthPage
-          key={path}
-          path={path}
-          login={login}
-          navigate={navigate}
-          setUser={setUser}
-          setNotice={setNotice}
-          notice={notice}
-        />
-      )}
+      <RouteBoundary key={path}>
+        <Suspense
+          fallback={
+            <main className="page" role="status">
+              Opening your portal…
+            </main>
+          }
+        >
+          {loading ? (
+            <main className="page">
+              <p role="status">Opening your portal…</p>
+            </main>
+          ) : path === "/" ? (
+            <Landing navigate={navigate} />
+          ) : protectedPaths.includes(path) && !user ? (
+            <main className="page">
+              <p>Sign in to continue.</p>
+              <button onClick={() => navigate("/login")}>Sign in</button>
+            </main>
+          ) : path === "/verify" ? (
+            <Verify
+              user={user}
+              onVerified={async () => {
+                const u = await api("/me");
+                setUser(u);
+                navigate(home(u.role));
+              }}
+            />
+          ) : path === "/exam" ? (
+            <Exam />
+          ) : path === "/examiner" && user?.role === "examiner" ? (
+            <Examiner user={user} navigate={navigate} />
+          ) : allowed && user?.role === allowed ? (
+            <Workspace user={user} navigate={navigate} />
+          ) : (
+            <AuthPage
+              key={path}
+              path={path}
+              login={login}
+              navigate={navigate}
+              setUser={setUser}
+              setNotice={setNotice}
+              notice={notice}
+            />
+          )}
+        </Suspense>
+      </RouteBoundary>
       <footer className="footer">
         <span>EXAMPRO</span>
         <span>
@@ -276,16 +328,25 @@ function Landing({ navigate }) {
 }
 function AuthPage({ path, login, navigate, setUser, setNotice, notice }) {
   const [illustrationGender, setIllustrationGender] = useState(null);
-  if (["/login", "/invigilator-login", "/admin-login"].includes(path))
+  if (
+    [
+      "/login",
+      "/invigilator-login",
+      "/admin-login",
+      "/examiner-login",
+    ].includes(path)
+  )
     return (
       <LoginPage
         key={path}
         role={
-          path === "/admin-login"
-            ? "admin"
-            : path === "/invigilator-login"
-              ? "invigilator"
-              : "candidate"
+          path === "/examiner-login"
+            ? "examiner"
+            : path === "/admin-login"
+              ? "admin"
+              : path === "/invigilator-login"
+                ? "invigilator"
+                : "candidate"
         }
         login={login}
         navigate={navigate}

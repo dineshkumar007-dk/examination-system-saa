@@ -1,0 +1,19 @@
+{
+  "mode": "baseline",
+  "recordedAt": "2026-11-09T08:10:08.687Z",
+  "samples": 3,
+  "target": "https://examination-system-saa.vercel.app",
+  "note": "Real HTTP sign-in and reconstructed dashboard request path. Includes platform/network delays; no browser paint measurement.",
+  "loginMs": [
+    6342.75,
+    4845.34,
+    3570.14
+  ],
+  "overviewWorkflowMs": [
+    8562.52,
+    4041.22,
+    5020.02
+  ],
+  "loginP50ms": 4845.34,
+  "overviewP50ms": 5020.02
+}

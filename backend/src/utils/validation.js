@@ -23,7 +23,7 @@ export const staffCreate = z
   .object({
     name: z.string().trim().min(2).max(120),
     email,
-    role: z.literal("invigilator"),
+    role: z.enum(["invigilator", "examiner"]),
     centerId: id.nullable(),
     password,
     confirmPassword: z.string(),

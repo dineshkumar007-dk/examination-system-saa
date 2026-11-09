@@ -10,7 +10,7 @@ This is a separate project. No previous application is imported or modified. Pro
 
 ## Structure
 
-Login provides separate Candidate, Invigilator and Administrator tabs (`/login`, `/invigilator-login`, `/admin-login`). The server restricts each password sign-in to its selected role. Administrator tabs and reloads still require a fresh password sign-in. Question-paper authoring is admin-only; new staff creation supports invigilators. Apply migration `006_retire_examiner.sql` before deploying: it disables obsolete examiner accounts and revokes their sessions while retaining their records.
+Login provides Candidate, Invigilator, Examiner and Administrator tabs. The server restricts each sign-in to its selected role; administrator tabs and reloads still require fresh password sign-in. Administrators create Examiner accounts and assign examinations. Only assigned Examiners can upload PowerPoint papers, enter keys and publish questions. Administrators cannot author papers or access their keys. See [the upgrade guide](docs/UPGRADE.md) for permissions, upload formats, measurements and setup. Apply migrations through `008_dashboard_indexes.sql` before deploying this version. Existing retired Examiner accounts remain disabled until explicitly reactivated by an administrator.
 
 ```text
 frontend/react/               React screens, shared forms, navy/white CSS
@@ -122,7 +122,7 @@ All names and placeholders are in `.env.example`:
 
 Invigilators use `/invigilator-login` with their own administrator-created accounts. The server rejects candidate, examiner, and administrator credentials at this dedicated sign-in endpoint. In the invigilator dashboard, **Workstations → Grant exam access to this device** authorizes the browser for a specific center computer and exam slot. Staff then sign out before the assigned candidate signs in. The grant expires at the slot end or after eight hours, whichever is earlier. An ordinary home browser without the grant cannot start or save an exam. This browser authorization does not independently establish physical location: hall-only operation requires supervised devices and a center network or device certificate policy.
 
-1. Operator creates an examination as draft, adds MCQ/MSQ/NAT questions, then opens registration with valid dates. Examiners may author question banks; only administrators assign staff access.
+1. Administrator creates an examination as draft and assigns an active Examiner. That Examiner uploads a PPTX, verifies extracted MCQs and figures, supplies the answer key manually, and publishes the paper. The administrator controls registration dates and exam activation. Existing MCQ/MSQ/NAT examination records and attempts remain compatible; new uploaded papers use MCQs.
 2. Candidate creates an account, requests a real email code on `/verify` and verifies it. A pending account can resume through `/resume`, but cannot access protected candidate features. After activation, complete the chosen exam registration from the dashboard. Each examination registration receives unique registration/application IDs.
 3. If there is a fee, the candidate chooses an explicitly simulated successful or failed payment. A successful simulation marks the registration completed. Production payment collection is not implemented.
 4. Operator adds active centers and computer inventory, creates nonoverlapping slots, closes exam registration and allocates eligible candidates. Slot capacity is locked transactionally; overbooking and duplicate PC assignments are rejected.

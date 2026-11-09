@@ -175,3 +175,19 @@ test("mocked candidate question delivery uses explicit safe columns and never fe
   assert.ok(!state.queries.some((q) => q.includes("answer_keys")));
   assert.ok(!JSON.stringify(data).includes("correct_answer"));
 });
+test("status polling validates admission without querying question/options/answers", async () => {
+  setup();
+  state.queries = [];
+  const status = await exams.getAttempt("owner", "access", "workstation", true);
+  assert.equal(status.id, "attempt");
+  assert.equal(status.questions, undefined);
+  assert.equal(state.queries.length, 3);
+  assert.ok(
+    !state.queries.some(
+      (q) =>
+        q.includes("question_options") ||
+        q.includes("answer_keys") ||
+        q.includes("student_answers"),
+    ),
+  );
+});

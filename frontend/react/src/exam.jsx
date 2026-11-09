@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "./api.js";
+import { createExamClock } from "./exam-clock.js";
 import { Form, field, Notice, useConfirm } from "./components.jsx";
 export function Exam() {
   const [attempt, setAttempt] = useState(null),
@@ -11,7 +12,8 @@ export function Exam() {
     [loading, setLoading] = useState(true),
     [remaining, setRemaining] = useState(0),
     [submitted, setSubmitted] = useState(false);
-  const offset = useRef(0),
+  const clock = useRef(null),
+    lastPoll = useRef(0),
     saving = useRef(false),
     polling = useRef(false);
   const [ask, confirmation] = useConfirm();
@@ -23,7 +25,7 @@ export function Exam() {
         setAttempt(null);
         return;
       }
-      offset.current = r.serverTime - Date.now();
+      clock.current = createExamClock(r.serverTime, r.deadline);
       setAttempt(r);
       const a = Object.fromEntries(
         r.answers.map((v) => [v.question_id, { ...v, review: !!v.review }]),
@@ -44,20 +46,22 @@ export function Exam() {
     if (!attempt) return;
     let ticks = 0;
     const tick = async () => {
-      const seconds = Math.max(
-        0,
-        Math.ceil((attempt.deadline - Date.now() - offset.current) / 1000),
-      );
+      const seconds = clock.current.remaining();
       setRemaining(seconds);
-      if ((seconds === 0 || ++ticks % 30 === 0) && !polling.current) {
+      if (
+        (seconds === 0 || ++ticks % 30 === 0) &&
+        !polling.current &&
+        performance.now() - lastPoll.current >= (seconds === 0 ? 5000 : 25000)
+      ) {
+        lastPoll.current = performance.now();
         polling.current = true;
         try {
-          const r = await api("/exam/attempt");
+          const r = await api("/exam/status");
           if (r.submitted) {
             setSubmitted(true);
             setAttempt(null);
           } else {
-            offset.current = r.serverTime - Date.now();
+            clock.current = createExamClock(r.serverTime, r.deadline);
           }
         } catch (e) {
           setNotice({
@@ -85,7 +89,7 @@ export function Exam() {
         old = answers[q.id];
       const result = await api("/exam/answer", "PUT", {
         questionId: q.id,
-        answer: value,
+        answer: Array.isArray(value) && !value.length ? null : value,
         review: review ?? old?.review ?? false,
         expectedRevision: old?.revision || 0,
       });
@@ -237,6 +241,14 @@ export function Exam() {
             </span>
           </div>
           <h2>{q.prompt}</h2>
+          {(q.media || []).map((m, i) => (
+            <img
+              className="question-media"
+              key={i}
+              src={`data:${m.mime};base64,${m.data}`}
+              alt={`Question ${index + 1} figure ${i + 1}`}
+            />
+          ))}
           {q.type === "NAT" ? (
             <label className="field">
               <span>Numeric answer</span>

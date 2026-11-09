@@ -195,10 +195,21 @@ async function withAttempt(userId, accessToken, workstationToken, fn) {
   if (result.error) fail(result.status, result.error);
   return result;
 }
-export async function getAttempt(userId, access, workstation) {
+export async function getAttempt(
+  userId,
+  access,
+  workstation,
+  statusOnly = false,
+) {
   return withAttempt(userId, access, workstation, async (attempt, row, c) => {
+    if (statusOnly)
+      return {
+        id: attempt.id,
+        deadline: nowMs(attempt.deadline),
+        serverTime: Date.now(),
+      };
     const questions = await query(
-      "SELECT id,type,prompt,marks,negative_marks,position FROM questions WHERE exam_id=? ORDER BY position",
+      "SELECT id,type,prompt,marks,negative_marks,position,media FROM questions WHERE exam_id=? ORDER BY position",
       [row.exam_id],
       c,
     );
@@ -212,6 +223,11 @@ export async function getAttempt(userId, access, workstation) {
       [attempt.id],
       c,
     );
+    const grouped = new Map();
+    for (const option of options) {
+      if (!grouped.has(option.question_id)) grouped.set(option.question_id, []);
+      grouped.get(option.question_id).push(option);
+    }
     return {
       id: attempt.id,
       candidateName: row.candidate_name,
@@ -221,7 +237,7 @@ export async function getAttempt(userId, access, workstation) {
       serverTime: Date.now(),
       questions: questions.map((q) => ({
         ...q,
-        options: options.filter((o) => o.question_id === q.id),
+        options: grouped.get(q.id) || [],
       })),
       answers,
     };
@@ -330,27 +346,37 @@ export async function evaluate(actor, examId) {
       [examId],
       c,
     );
-    for (const attempt of rows) {
-      const answers = await query(
-        "SELECT question_id,answer FROM student_answers WHERE attempt_id=?",
-        [attempt.id],
-        c,
-      );
-      const score = questions.reduce(
-        (sum, q) =>
-          sum + grade(q, answers.find((a) => a.question_id === q.id)?.answer),
-        0,
-      );
-      const [existing] = await query(
-        "SELECT status FROM results WHERE attempt_id=?",
-        [attempt.id],
-        c,
-      );
-      if (existing?.status === "Published")
-        fail(409, "Published results are locked.");
+    const answers = await query(
+      "SELECT a.attempt_id,a.question_id,a.answer FROM student_answers a JOIN exam_attempts t ON t.id=a.attempt_id JOIN candidate_allocations ca ON ca.id=t.allocation_id JOIN registrations r ON r.id=ca.registration_id WHERE r.exam_id=?",
+      [examId],
+      c,
+    );
+    const [locked] = await query(
+      "SELECT rs.attempt_id FROM results rs JOIN exam_attempts t ON t.id=rs.attempt_id JOIN candidate_allocations a ON a.id=t.allocation_id JOIN registrations r ON r.id=a.registration_id WHERE r.exam_id=? AND rs.status='Published' LIMIT 1",
+      [examId],
+      c,
+    );
+    if (locked) fail(409, "Published results are locked.");
+    const grouped = new Map();
+    for (const answer of answers) {
+      if (!grouped.has(answer.attempt_id))
+        grouped.set(answer.attempt_id, new Map());
+      grouped.get(answer.attempt_id).set(answer.question_id, answer.answer);
+    }
+    for (let offset = 0; offset < rows.length; offset += 250) {
+      const batch = rows.slice(offset, offset + 250);
+      const values = batch.flatMap((attempt) => [
+        attempt.id,
+        questions.reduce(
+          (sum, q) => sum + grade(q, grouped.get(attempt.id)?.get(q.id)),
+          0,
+        ),
+      ]);
       await query(
-        "INSERT INTO results(attempt_id,score,status,evaluated_at) VALUES(?,?,'Evaluated',UTC_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE score=VALUES(score),status='Evaluated',evaluated_at=UTC_TIMESTAMP(3)",
-        [attempt.id, score],
+        "INSERT INTO results(attempt_id,score,status,evaluated_at) VALUES " +
+          batch.map(() => "(?,?,'Evaluated',UTC_TIMESTAMP(3))").join(",") +
+          " ON DUPLICATE KEY UPDATE score=VALUES(score),status='Evaluated',evaluated_at=UTC_TIMESTAMP(3)",
+        values,
         c,
       );
     }

@@ -179,7 +179,7 @@ test("mocked recovery consumes code and invalidates account sessions", async () 
     auth.resetPassword(state.user.email, code, "another-password"),
   );
 });
-test("selected login roles reject wrong-role credentials and retired examiners", async () => {
+test("selected login roles reject wrong-role credentials and accept active examiners", async () => {
   await setup();
   state.user.status = "active";
   state.user.email_verified_at = "yes";
@@ -194,8 +194,14 @@ test("selected login roles reject wrong-role credentials and retired examiners",
     (e) => e.status === 401,
   );
   state.user.role = "examiner";
+  assert.equal(
+    (await auth.login(state.user.email, "valid-long-password", "examiner"))
+      .role,
+    "examiner",
+  );
+  state.user.status = "disabled";
   await assert.rejects(
-    auth.login(state.user.email, "valid-long-password"),
+    auth.login(state.user.email, "valid-long-password", "examiner"),
     (e) => e.status === 401,
   );
 });

@@ -9,6 +9,12 @@ export function LoginPage({ role = "candidate", login, navigate }) {
     [error, setError] = useState("");
   const roles = [
     {
+      key: "examiner",
+      label: "Examiner",
+      path: "/examiner-login",
+      action: "Sign in as examiner",
+    },
+    {
       key: "candidate",
       label: "Candidate",
       path: "/login",
@@ -83,9 +89,11 @@ export function LoginPage({ role = "candidate", login, navigate }) {
         <p className="signin-intro">
           {role === "admin"
             ? "Use your administrator account credentials."
-            : role === "invigilator"
-              ? "Use your assigned invigilator account."
-              : "Use your registered email or mobile number."}
+            : role === "examiner"
+              ? "Use your assigned examiner account."
+              : role === "invigilator"
+                ? "Use your assigned invigilator account."
+                : "Use your registered email or mobile number."}
         </p>
         <div
           className="signin-roles"

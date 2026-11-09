@@ -1,0 +1,101 @@
+.paper-list {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+.paper-editor-tabs,
+.paper-question-controls,
+.paper-option {
+  display: flex;
+  gap: 14px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+.role-examiner .panel {
+  margin-bottom: 20px;
+}
+.role-examiner .sidebar-logo {
+  width: 100%;
+}
+.upload-paper-button {
+  margin: 16px 0;
+}
+.paper-option {
+  flex-wrap: nowrap;
+  align-items: start;
+}
+.paper-option select {
+  width: 70px;
+  flex-shrink: 0;
+}
+.paper-question-controls .field {
+  max-width: 150px;
+}
+.question-editor > .field {
+  margin: 18px 0;
+}
+.paper-option textarea {
+  min-height: 50px;
+}
+.paper-issue {
+  padding: 14px;
+  background: #fff7e9;
+  border-radius: 10px;
+  margin-top: 12px;
+}
+.question-media {
+  display: block;
+  max-width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  margin: 14px 0;
+}
+.slide-preview {
+  border: 1px solid var(--line);
+  padding: 14px;
+  margin-top: 14px;
+  border-radius: 10px;
+}
+.slide-preview pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+}
+.manual-key {
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin-bottom: 15px;
+}
+.manual-key label {
+  display: inline-flex;
+  gap: 8px;
+  margin: 10px 20px 0 0;
+  align-items: center;
+}
+.manual-key input,
+.review-confirm input {
+  width: auto;
+}
+.manual-key legend {
+  font-size: 14px;
+}
+.review-confirm {
+  display: flex;
+  gap: 10px;
+  align-items: start;
+  margin-bottom: 18px;
+  font-size: 14px;
+}
+.signin-roles {
+  flex-wrap: wrap;
+}
+@media (max-width: 570px) {
+  .signin-roles button {
+    flex-basis: 50%;
+    border-bottom: 1px solid #eee8f3;
+  }
+  .paper-editor-tabs button {
+    font-size: 12px;
+  }
+}

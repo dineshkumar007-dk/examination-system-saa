@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
+import { workspaceResources } from "./workspace-resources.js";
 import { api, dateText, localDate } from "./api.js";
 import { Avatar, Icon } from "./illustrations.jsx";
 import logo from "./assets/exampro-logo.jpeg";
@@ -26,7 +27,6 @@ const menus = {
     "Slots",
     "Registrations",
     "Users",
-    "Questions",
     "Admission",
     "Workstations",
     "Results",
@@ -83,16 +83,13 @@ const column = (k) => ({
     )
       ? dateText
       : ["status", "attendance", "role", "result_status"].includes(k)
-        ? (v) => (
-            <Status
-              value={k === "role" && v === "examiner" ? "Retired staff" : v}
-            />
-          )
+        ? (v) => <Status value={v} />
         : k === "active"
           ? (v) => <Status value={v ? "Active" : "Inactive"} />
           : undefined,
 });
 export function Workspace({ user, navigate }) {
+  const references = useRef(new Map());
   const [view, setView] = useState(menus[user.role][0]),
     [rows, setRows] = useState([]),
     [catalog, setCatalog] = useState({
@@ -111,31 +108,37 @@ export function Workspace({ user, navigate }) {
     [revision, setRevision] = useState(0),
     [selected, setSelected] = useState("");
   const [ask, confirmation] = useConfirm();
-  const refresh = () => setRevision((r) => r + 1);
+  const refresh = () => {
+    references.current.clear();
+    setRevision((r) => r + 1);
+  };
   useEffect(() => {
     let alive = true;
     setLoading(true);
     (async () => {
       const c = { exams: [], centers: [], slots: [], pcs: [] };
-      if (user.role !== "invigilator")
-        c.exams = await api(
-          user.role === "candidate"
-            ? "/examinations?limit=100"
-            : "/manage/examinations?limit=100",
-        );
-      if (["admin", "invigilator"].includes(user.role)) {
-        [c.centers, c.slots] = await Promise.all([
-          api("/manage/centers"),
-          api("/manage/slots"),
-        ]);
-        c.pcs = (
-          await Promise.all(
-            c.centers.map((center) =>
-              api("/manage/computers?centerId=" + center.id),
-            ),
-          )
-        ).flat();
-      }
+      const needed = workspaceResources(user.role, view);
+      const cached = async (path) => {
+        const hit = references.current.get(path);
+        if (hit && hit.expires > Date.now()) return hit.data;
+        const data = await api(path);
+        references.current.set(path, { data, expires: Date.now() + 15000 });
+        return data;
+      };
+      await Promise.all([
+        needed.exams
+          ? cached(
+              user.role === "candidate"
+                ? "/examinations?limit=100"
+                : "/manage/examinations?limit=100",
+            ).then((v) => (c.exams = v))
+          : null,
+        needed.centers
+          ? cached("/manage/centers").then((v) => (c.centers = v))
+          : null,
+        needed.slots ? api("/manage/slots").then((v) => (c.slots = v)) : null,
+        needed.pcs ? api("/manage/computers").then((v) => (c.pcs = v)) : null,
+      ]);
       const q = `?page=${page}&limit=25&search=${encodeURIComponent(search)}`;
       let data = [];
       if (view === "Overview") {
@@ -143,9 +146,9 @@ export function Workspace({ user, navigate }) {
           const s = await api("/manage/overview");
           if (alive) setStats(s);
         } else {
-          data = await api("/registrations/mine");
-          const p = await api("/profile");
-          if (alive) setProfile(p);
+          const dashboard = await api("/dashboard");
+          data = dashboard.registrations;
+          if (alive) setProfile(dashboard.profile);
         }
       } else if (view === "Examinations")
         data =
@@ -325,7 +328,7 @@ export function Workspace({ user, navigate }) {
       [
         field("name", "Full name"),
         field("email", "Email", "email"),
-        field("role", "Role", "select", choices(["invigilator"])),
+        field("role", "Role", "select", choices(["invigilator", "examiner"])),
         field(
           "centerId",
           "Assigned center",
@@ -348,7 +351,12 @@ export function Workspace({ user, navigate }) {
     open(
       "Access · " + r.name,
       [
-        field("role", "Role", "select", choices(["candidate", "invigilator"])),
+        field(
+          "role",
+          "Role",
+          "select",
+          choices(["candidate", "invigilator", "examiner"]),
+        ),
         field("status", "Status", "select", choices(["active", "disabled"])),
         field(
           "centerId",
@@ -360,7 +368,7 @@ export function Workspace({ user, navigate }) {
       ],
       {
         ...r,
-        role: r.role === "examiner" ? "" : r.role,
+        role: r.role,
         centerId: r.center_id || "",
       },
       (d) =>
@@ -478,79 +486,6 @@ export function Workspace({ user, navigate }) {
       {},
       (d) => api("/invigilator/workstation", "POST", d),
     );
-  const editQuestion = (r) => {
-    if (!selected) return;
-    open(
-      r ? "Edit question" : "Add question",
-      [
-        field(
-          "type",
-          "Question type",
-          "select",
-          choices(["MCQ", "MSQ", "NAT"]),
-        ),
-        field("prompt", "Question text", "textarea", null, { wide: true }),
-        field(
-          "options",
-          "Options, one per line: A|Option text",
-          "textarea",
-          null,
-          { required: false, wide: true },
-        ),
-        field("key", "Answer key", null, null, {
-          help: "MCQ: A · MSQ: A,B · NAT: a number",
-        }),
-        field("tolerance", "Numeric tolerance", "number"),
-        field("marks", "Marks", "number"),
-        field("negativeMarks", "Negative marks", "number"),
-        field("position", "Question number", "number"),
-      ],
-      r
-        ? {
-            ...r,
-            options: r.options.map((o) => o.id + "|" + o.text).join("\n"),
-            key: Array.isArray(r.correct_answer)
-              ? r.correct_answer.join(",")
-              : r.correct_answer,
-            negativeMarks: r.negative_marks,
-          }
-        : {
-            type: "MCQ",
-            options: "A|\nB|\nC|\nD|",
-            marks: 1,
-            negativeMarks: 0,
-            tolerance: 0,
-            position: rows.length + 1,
-          },
-      (d) =>
-        api("/manage/questions" + (r ? "/" + r.id : ""), r ? "PUT" : "POST", {
-          examId: selected,
-          type: d.type,
-          prompt: d.prompt,
-          options:
-            d.type === "NAT"
-              ? []
-              : d.options
-                  .split("\n")
-                  .filter(Boolean)
-                  .map((line) => {
-                    const i = line.indexOf("|");
-                    return {
-                      id: line.slice(0, i).trim(),
-                      text: line.slice(i + 1).trim(),
-                    };
-                  }),
-          correctAnswer:
-            d.type === "NAT"
-              ? Number(d.key)
-              : d.key.split(",").map((s) => s.trim()),
-          tolerance: Number(d.tolerance),
-          marks: Number(d.marks),
-          negativeMarks: Number(d.negativeMarks),
-          position: Number(d.position),
-        }),
-    );
-  };
   const reissue = async (r) => {
     if (
       await ask(
@@ -563,6 +498,7 @@ export function Workspace({ user, navigate }) {
   };
   const columns = {
     Examinations: [
+      ...(user.role === "admin" ? ["examiner_name", "paper_published"] : []),
       "name",
       "status",
       "duration_minutes",
@@ -588,7 +524,6 @@ export function Workspace({ user, navigate }) {
       "hall_number",
     ],
     Users: ["name", "email", "role", "status"],
-    Questions: ["position", "type", "prompt", "marks", "negative_marks"],
     Admission: [
       "name",
       "registration_number",
@@ -623,6 +558,25 @@ export function Workspace({ user, navigate }) {
             onClick={() => editExam(r)}
           >
             Edit
+          </button>
+          <button
+            className="small-button secondary"
+            onClick={async () => {
+              try {
+                const examiners = await api("/manage/examiners");
+                open(
+                  "Assign Examiner · " + r.name,
+                  [field("examinerId", "Examiner", "select", opts(examiners))],
+                  {},
+                  (d) =>
+                    api("/manage/examinations/" + r.id + "/examiner", "PUT", d),
+                );
+              } catch (e) {
+                setNotice({ text: e.message, kind: "error" });
+              }
+            }}
+          >
+            Assign Examiner
           </button>
           <button
             className="small-button danger"
@@ -728,23 +682,6 @@ export function Workspace({ user, navigate }) {
           {r.active ? "Deactivate" : "Activate"}
         </button>
       );
-    if (view === "Questions")
-      return (
-        <>
-          <button
-            className="small-button secondary"
-            onClick={() => editQuestion(r)}
-          >
-            Edit
-          </button>
-          <button
-            className="small-button danger"
-            onClick={() => deleteRecord("questions", r)}
-          >
-            Delete
-          </button>
-        </>
-      );
     if (
       view === "Notifications" &&
       user.role === "admin" &&
@@ -770,7 +707,6 @@ export function Workspace({ user, navigate }) {
     Centers: ["Add center", () => editCenter()],
     Slots: ["Create slot", createSlot],
     Users: ["Create staff account", createStaff],
-    Questions: selected ? ["Add question", () => editQuestion()] : null,
     Computers: selected
       ? [
           "Add computer",
@@ -893,7 +829,10 @@ export function Workspace({ user, navigate }) {
                   <section className="panel operational-note">
                     <h2>Examination lifecycle</h2>
                     <ol>
-                      <li>Prepare the examination and question paper.</li>
+                      <li>
+                        Assign an Examiner to prepare and publish the question
+                        paper.
+                      </li>
                       <li>
                         Open registration, then close it before allocating
                         slots.

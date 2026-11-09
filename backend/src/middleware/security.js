@@ -1,4 +1,4 @@
-import { query, transaction } from "../config/database.js";
+import { query } from "../config/database.js";
 import { appUrl } from "../config/env.js";
 import { digest, token, equal, fail } from "../utils/security.js";
 import { validAdminAccess } from "./admin-access.js";
@@ -40,35 +40,17 @@ export function csrfGuard(req, res, next) {
   next();
 }
 export async function rateLimit(key, maximum, seconds) {
-  const allowed = await transaction(async (c) => {
-    const hash = digest(`rate:${key}`);
-    await query(
-      "INSERT IGNORE INTO rate_limits(bucket_key,hits,resets_at) VALUES(?,0,DATE_ADD(UTC_TIMESTAMP(3),INTERVAL ? SECOND))",
-      [hash, seconds],
-      c,
-    );
-    const [row] = await query(
-      "SELECT hits,resets_at<=UTC_TIMESTAMP(3) AS expired FROM rate_limits WHERE bucket_key=? FOR UPDATE",
-      [hash],
-      c,
-    );
-    if (row.expired) {
-      await query(
-        "UPDATE rate_limits SET hits=1,resets_at=DATE_ADD(UTC_TIMESTAMP(3),INTERVAL ? SECOND) WHERE bucket_key=?",
-        [seconds, hash],
-        c,
-      );
-      return true;
-    }
-    if (row.hits >= maximum) return false;
-    await query(
-      "UPDATE rate_limits SET hits=hits+1 WHERE bucket_key=?",
-      [hash],
-      c,
-    );
-    return true;
-  });
-  if (!allowed)
+  // The atomic upsert returns this request's counter in the MySQL OK packet.
+  // No cached decisions or separate read can race with concurrent requests.
+  const result = await query(
+    "INSERT INTO rate_limits(bucket_key,hits,resets_at) VALUES(?,LAST_INSERT_ID(1),DATE_ADD(UTC_TIMESTAMP(3),INTERVAL ? SECOND)) ON DUPLICATE KEY UPDATE hits=LAST_INSERT_ID(IF(resets_at<=UTC_TIMESTAMP(3),1,LEAST(hits+1,?))),resets_at=IF(resets_at<=UTC_TIMESTAMP(3),DATE_ADD(UTC_TIMESTAMP(3),INTERVAL ? SECOND),resets_at)",
+    [digest(`rate:${key}`), seconds, maximum + 1, seconds],
+  );
+  if (
+    !Number.isInteger(result.insertId) ||
+    result.insertId < 1 ||
+    result.insertId > maximum
+  )
     fail(429, "Too many requests. Please wait before trying again.");
 }
 export const throttle =
@@ -106,7 +88,7 @@ export async function authenticate(req, res, next) {
       "SELECT u.id,u.name,u.email,u.phone,u.role,u.status,u.gender,u.center_id,u.email_verified_at,u.phone_verified_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>UTC_TIMESTAMP(3)",
       [digest(req.cookies.ep_session)],
     );
-    if (!user || user.status === "disabled" || user.role === "examiner")
+    if (!user || user.status === "disabled")
       fail(401, "Your session expired or your account is unavailable.");
     if (
       user.role === "admin" &&

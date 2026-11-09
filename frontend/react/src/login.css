@@ -122,6 +122,7 @@
   line-height: 1.5;
 }
 .signin-roles {
+  flex-wrap: wrap;
   display: flex;
   border: 1px solid #e9e3ef;
   border-radius: 8px;
@@ -296,6 +297,10 @@
   }
 }
 @media (max-width: 570px) {
+  .signin-roles button {
+    flex-basis: 50%;
+    border-bottom: 1px solid #eee8f3;
+  }
   .signin-page {
     grid-template-columns: 1fr;
     min-height: 0;

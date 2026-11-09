@@ -1,0 +1,38 @@
+{
+  "mode": "baseline",
+  "recordedAt": "2026-11-09T06:41:09.258Z",
+  "samples": 3,
+  "timings": {
+    "databaseRoundTrip": {
+      "ms": [
+        577.81,
+        36.93,
+        33.59
+      ],
+      "p50ms": 36.93
+    },
+    "passwordLogin": {
+      "ms": [
+        376.02,
+        324.51,
+        308.08
+      ],
+      "p50ms": 324.51
+    },
+    "adminOverviewData": {
+      "ms": [
+        577.92,
+        294.37,
+        263.22
+      ],
+      "p50ms": 294.37
+    }
+  },
+  "bundles": [
+    {
+      "file": "index-Bexi9Gnh.js",
+      "bytes": 287058,
+      "gzipBytes": 86154
+    }
+  ]
+}

@@ -28,6 +28,8 @@ const routes = [
   "login",
   "invigilator-login",
   "admin-login",
+  "examiner-login",
+  "examiner",
   "signup",
   "resume",
   "forgot",

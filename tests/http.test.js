@@ -10,6 +10,8 @@ test("public pages and Bootstrap assets serve with security headers", async () =
     "/login",
     "/invigilator-login",
     "/admin-login",
+    "/examiner-login",
+    "/examiner",
     "/signup",
     "/exam",
     "/assets/bootstrap/css/bootstrap.min.css",
@@ -31,6 +33,8 @@ test("private APIs require server-side authentication", async () => {
     "/api/manage/questions",
     "/api/registrations/mine",
     "/api/exam/attempt",
+    "/api/exam/status",
+    "/api/examiner/papers",
   ]) {
     const r = await request(app).get(path);
     assert.equal(r.status, 401);

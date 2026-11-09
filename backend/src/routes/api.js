@@ -1,3 +1,4 @@
+import { examinerRouter } from "./examiner.js";
 import { Router } from "express";
 import * as controllers from "../controllers/auth-controller.js";
 import { z } from "zod";
@@ -12,7 +13,6 @@ import {
   examInput,
   centerInput,
   slotInput,
-  questionInput,
   staffCreate,
 } from "../utils/validation.js";
 import { fail, digest, dateSql, token, equal } from "../utils/security.js";
@@ -79,6 +79,11 @@ router.get("/examinations", async (req, res) => {
 router.post("/auth/signup", throttle("signup", 5, 3600), controllers.signUp);
 router.post("/auth/login", throttle("login", 10), controllers.logIn);
 router.post("/auth/admin-login", throttle("login", 10), controllers.adminLogIn);
+router.post(
+  "/auth/examiner-login",
+  throttle("login", 10),
+  controllers.examinerLogIn,
+);
 router.post(
   "/auth/invigilator-login",
   throttle("login", 10),
@@ -151,6 +156,7 @@ router.post(
   },
 );
 router.use(active);
+router.use("/examiner", roles("examiner"), examinerRouter);
 router.get("/notifications", async (req, res) =>
   res.json(
     await query(
@@ -195,6 +201,18 @@ router.get("/profile", async (req, res) => {
 router.get("/registrations/mine", roles("candidate"), async (req, res) =>
   res.json(await registration.myRegistrations(req.user.id)),
 );
+router.get("/dashboard", roles("candidate"), async (req, res) => {
+  const [registrations, [profile]] = await Promise.all([
+    registration.myRegistrations(req.user.id),
+    query("SELECT dob,address,selected_exam_id FROM students WHERE user_id=?", [
+      req.user.id,
+    ]),
+  ]);
+  res.json({
+    registrations,
+    profile: { ...auth.publicUser(req.user), ...profile },
+  });
+});
 router.post("/registrations", roles("candidate"), async (req, res) => {
   const d = z.object({ examId: id }).strict().parse(req.body);
   res.status(201).json(await registration.register(req.user.id, d.examId));
@@ -295,6 +313,16 @@ router.get("/exam/attempt", roles("candidate"), async (req, res) =>
     ),
   ),
 );
+router.get("/exam/status", roles("candidate"), async (req, res) =>
+  res.json(
+    await exam.getAttempt(
+      req.user.id,
+      req.cookies.ep_exam,
+      req.cookies.ep_workstation,
+      true,
+    ),
+  ),
+);
 router.put("/exam/answer", roles("candidate"), async (req, res) => {
   const d = z
     .object({
@@ -337,7 +365,7 @@ router.get("/manage/examinations", roles("admin"), async (req, res) => {
   const p = paging(req);
   res.json(
     await query(
-      "SELECT * FROM examinations WHERE deleted_at IS NULL AND name LIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+      "SELECT e.*,a.examiner_id,u.name AS examiner_name,EXISTS(SELECT 1 FROM question_papers p WHERE p.exam_id=e.id AND p.status='published') AS paper_published FROM examinations e LEFT JOIN examiner_assignments a ON a.exam_id=e.id LEFT JOIN users u ON u.id=a.examiner_id WHERE e.deleted_at IS NULL AND e.name LIKE ? ORDER BY e.created_at DESC LIMIT ? OFFSET ?",
       [`%${p.search}%`, p.limit, p.offset],
     ),
   );
@@ -407,6 +435,24 @@ router.put("/manage/examinations/:id", roles("admin"), async (req, res) => {
         fail(409, "Examination content is locked after activation.");
     }
     if (d.status === "active") {
+      const [assignment] = await query(
+        "SELECT exam_id FROM examiner_assignments WHERE exam_id=?",
+        [examId],
+        c,
+      );
+      if (assignment) {
+        const [paper] = await query(
+          "SELECT id FROM question_papers WHERE exam_id=? AND status='published'",
+          [examId],
+          c,
+        );
+        if (!paper)
+          fail(
+            409,
+            "The assigned Examiner must publish the question paper before activation.",
+          );
+      }
+
       const [{ q }] = await query(
         "SELECT COUNT(*) AS q FROM questions WHERE exam_id=?",
         [examId],
@@ -511,12 +557,18 @@ router.get(
   "/manage/computers",
   roles("admin", "invigilator"),
   async (req, res) => {
-    const centerId = id.parse(req.query.centerId);
-    centerScope(req.user, centerId);
+    const centerId = req.query.centerId
+      ? id.parse(req.query.centerId)
+      : req.user.role === "invigilator"
+        ? req.user.center_id
+        : null;
+    if (centerId) centerScope(req.user, centerId);
     res.json(
       await query(
-        "SELECT * FROM computers WHERE center_id=? ORDER BY label LIMIT 5000",
-        [centerId],
+        "SELECT id,center_id,label,active FROM computers" +
+          (centerId ? " WHERE center_id=?" : "") +
+          " ORDER BY label LIMIT 5000",
+        centerId ? [centerId] : [],
       ),
     );
   },
@@ -658,6 +710,54 @@ router.get("/manage/users", roles("admin"), async (req, res) => {
     ),
   );
 });
+router.get("/manage/examiners", roles("admin"), async (req, res) =>
+  res.json(
+    await query(
+      "SELECT id,name,email FROM users WHERE role='examiner' AND status='active' AND deleted_at IS NULL ORDER BY name LIMIT 200",
+    ),
+  ),
+);
+router.put(
+  "/manage/examinations/:id/examiner",
+  roles("admin"),
+  async (req, res) => {
+    const examId = id.parse(req.params.id),
+      { examinerId } = z.object({ examinerId: id }).strict().parse(req.body);
+    await transaction(async (c) => {
+      const [exam] = await query(
+        "SELECT id,status,deleted_at FROM examinations WHERE id=? FOR UPDATE",
+        [examId],
+        c,
+      );
+      if (!exam || exam.deleted_at) fail(404, "Examination not found.");
+      if (["active", "completed"].includes(exam.status))
+        fail(409, "Examiner assignment is locked after activation.");
+      const [paper] = await query(
+        "SELECT id FROM question_papers WHERE exam_id=? AND status='published'",
+        [examId],
+        c,
+      );
+      if (paper)
+        fail(
+          409,
+          "The examination already has a published paper; its assignment is locked.",
+        );
+      const [examiner] = await query(
+        "SELECT id FROM users WHERE id=? AND role='examiner' AND status='active' AND deleted_at IS NULL",
+        [examinerId],
+        c,
+      );
+      if (!examiner) fail(400, "Select an active Examiner account.");
+      await query(
+        "INSERT INTO examiner_assignments(exam_id,examiner_id,assigned_by) VALUES(?,?,?) ON DUPLICATE KEY UPDATE examiner_id=VALUES(examiner_id),assigned_by=VALUES(assigned_by),assigned_at=UTC_TIMESTAMP(3)",
+        [examId, examinerId, req.user.id],
+        c,
+      );
+      await admin.audit(req.user.id, "exam.examiner.assign", examId, c);
+    });
+    res.json({ message: "Examiner assigned." });
+  },
+);
 router.post("/manage/staff", roles("admin"), async (req, res) => {
   const d = staffCreate.parse(req.body);
   const userId = randomUUID(),
@@ -681,7 +781,7 @@ router.post("/manage/staff", roles("admin"), async (req, res) => {
     await enqueue(
       userId,
       "Staff invitation",
-      `The administrator has provisioned your ${d.role} account. Sign in at ${d.role === "invigilator" ? "/invigilator-login" : "/login"} using this email and the password supplied separately by your examination administrator. No password is included in this notification. If you forget it, use Forgot password with this email.`,
+      `The administrator has provisioned your ${d.role} account. Sign in at ${d.role === "invigilator" ? "/invigilator-login" : "/examiner-login"} using this email and the password supplied separately by your examination administrator. No password is included in this notification. If you forget it, use Forgot password with this email.`,
       c,
     );
     await admin.audit(req.user.id, "staff.create", userId, c);
@@ -692,7 +792,7 @@ router.patch("/manage/users/:id", roles("admin"), async (req, res) => {
   const d = z
       .object({
         status: z.enum(["active", "disabled"]),
-        role: z.enum(["candidate", "invigilator"]),
+        role: z.enum(["candidate", "invigilator", "examiner"]),
         centerId: id.nullable(),
       })
       .strict()
@@ -740,48 +840,16 @@ router.delete("/manage/users/:id", roles("admin"), async (req, res) => {
       : "User deleted from the database. The email can be used for a new account.",
   });
 });
-router.get("/manage/questions", roles("admin"), async (req, res) => {
-  const examId = id.parse(req.query.examId);
-  const rows = await query(
-    "SELECT q.*,k.correct_answer,k.tolerance FROM questions q JOIN answer_keys k ON k.question_id=q.id WHERE q.exam_id=? ORDER BY position LIMIT 500",
-    [examId],
-  );
-  for (const q of rows)
-    q.options = await query(
-      "SELECT option_id AS id,option_text AS text FROM question_options WHERE question_id=?",
-      [q.id],
-    );
-  res.json(rows);
-});
-router.post("/manage/questions", roles("admin"), async (req, res) =>
+router.all("/manage/questions", roles("examiner"), (req, res) =>
   res
-    .status(201)
-    .json(await admin.saveQuestion(req.user.id, questionInput.parse(req.body))),
+    .status(410)
+    .json({ error: "Use the Examiner question-paper upload workflow." }),
 );
-router.put("/manage/questions/:id", roles("admin"), async (req, res) =>
-  res.json(
-    await admin.saveQuestion(
-      req.user.id,
-      questionInput.parse(req.body),
-      id.parse(req.params.id),
-    ),
-  ),
+router.all("/manage/questions/:id", roles("examiner"), (req, res) =>
+  res
+    .status(410)
+    .json({ error: "Use the Examiner question-paper upload workflow." }),
 );
-router.delete("/manage/questions/:id", roles("admin"), async (req, res) => {
-  const questionId = id.parse(req.params.id);
-  await transaction(async (c) => {
-    const [q] = await query(
-      "SELECT q.id,e.status FROM questions q JOIN examinations e ON e.id=q.exam_id WHERE q.id=? FOR UPDATE",
-      [questionId],
-      c,
-    );
-    if (!q || ["active", "completed"].includes(q.status))
-      fail(409, "This question is locked.");
-    await query("DELETE FROM questions WHERE id=?", [questionId], c);
-    await admin.audit(req.user.id, "question.delete", questionId, c);
-  });
-  res.json({ message: "Question deleted." });
-});
 router.get(
   "/invigilator/candidates",
   roles("admin", "invigilator"),
