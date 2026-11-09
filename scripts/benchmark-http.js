@@ -9,7 +9,7 @@ if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD)
   throw Error("Configure benchmark operator credentials locally.");
 const cookies = new Map();
 let csrf, proof;
-async function call(path, method = "GET", body) {
+async function call(path, method = "GET", body, expectedStatus) {
   const res = await fetch(origin + "/api" + path, {
     method,
     signal: AbortSignal.timeout(60000),
@@ -28,7 +28,7 @@ async function call(path, method = "GET", body) {
     cookies.set(part.slice(0, at), part.slice(at + 1));
   }
   const data = await res.json();
-  if (!res.ok)
+  if (expectedStatus ? res.status !== expectedStatus : !res.ok)
     throw Error(
       `Benchmark ${path}: HTTP ${res.status}. Stop and inspect configuration or wait for the normal rate window.`,
     );
@@ -68,6 +68,12 @@ try {
     result.overviewWorkflowMs.push(
       Number((performance.now() - start).toFixed(2)),
     );
+    if (!baseline && i === 0) {
+      await call("/examiner/papers", "GET", undefined, 403);
+      await call("/examiner/papers", "POST", {}, 403);
+      await call("/manage/questions", "GET", undefined, 403);
+      result.adminAuthoringDenied = true;
+    }
     await call("/auth/logout", "POST", {});
     proof = undefined;
   }

@@ -51,6 +51,21 @@ Vercel does not supply this executable. On Vercel, binary PPT produces an action
 
 ## Measured performance and changes
 
+### Live Vercel verification
+
+The upgrade was pushed to GitHub and verified on the connected Vercel deployment on 9 November 2026. `/api/health` reports the database connected, `/examiner-login` serves the new interface, and authenticated Admin requests to read/create Examiner papers and the retired question authoring API return 403.
+
+`scripts/benchmark-http.js` records three real HTTP samples against the same production domain before and after deployment, using normal administrator sign-in/sign-out sessions. It does not create examinations, submit real student attempts or send email. The dashboard timing follows the old catalog fan-out before deployment and the overview-only request path afterward.
+
+| Live HTTP median (3 samples)   |      Before |       After |
+| ------------------------------ | ----------: | ----------: |
+| Administrator sign-in          | 4,845.34 ms | 1,365.35 ms |
+| Dashboard API request sequence | 5,020.02 ms |   759.27 ms |
+
+Raw samples and the verified Admin authoring-denial flag are in `performance/http-baseline.json` and `performance/http-after.json`. Network/cold-start variability is substantial; these are API request timings, not browser-paint or representative concurrency measurements. No arbitrary percentage or throughput claim is made.
+
+### Managed-database workflow and bundle measurements
+
 Raw measurements are in `docs/performance/*.json`. `scripts/benchmark-upgrade.js` performs read-only queries against the configured managed DB and records three samples plus bundle sizes. Values below are medians of those three samples, not representative load-test percentiles.
 
 | Measurement                                    |        Before |         After |
