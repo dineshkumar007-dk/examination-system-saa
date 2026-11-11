@@ -7,6 +7,7 @@ import { execFile } from "node:child_process";
 import { mkdtemp, readFile, writeFile, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
+import { renderSlideImages } from "./slide-render-worker.js";
 export const MAX_UPLOAD = 3 * 1024 * 1024;
 const xml = new XMLParser({
   ignoreAttributes: false,
@@ -407,4 +408,49 @@ export async function parsePowerPoint(buffer, filename) {
   const result = extractQuestions(slides);
   result.slides = slides;
   return result;
+}
+
+// Slide papers do not infer questions, options or keys from slide text.
+export async function renderPowerPoint(buffer, filename) {
+  if (!Buffer.isBuffer(buffer) || !buffer.length || buffer.length > MAX_UPLOAD)
+    fail(413, "Upload a nonempty PowerPoint file no larger than 3 MB.");
+  const ext = path.extname(filename).toLowerCase();
+  if (![".pptx", ".ppt"].includes(ext)) fail(415, "Upload a PowerPoint file.");
+  if (ext === ".ppt") {
+    if (!buffer.subarray(0, 8).equals(Buffer.from("d0cf11e0a1b11ae1", "hex")))
+      fail(400, "Invalid legacy PPT signature.");
+    buffer = await convertLegacy(buffer);
+  }
+  const files = await unzip(buffer);
+  if (!files.has("ppt/presentation.xml"))
+    fail(400, "Missing PowerPoint presentation.");
+  for (const [name, data] of files)
+    if (/\.(xml|rels)$/i.test(name)) parse(data, false);
+  const ids = nodes(parse(files.get("ppt/presentation.xml")), "p:sldId");
+  if (!ids.length || ids.length > 300) fail(400, "Upload 1–300 slides.");
+  const images = await renderSlideImages(buffer).catch((error) =>
+    fail(422, `Cannot render this PowerPoint: ${error.message}`),
+  );
+  if (images.length !== ids.length)
+    fail(422, "Slide rendering was incomplete.");
+  return {
+    images,
+    document: {
+      mode: "slides",
+      questions: images.map((_, i) => ({
+        number: i + 1,
+        prompt: `Slide ${i + 1}`,
+        slides: [i + 1],
+        options: ["A", "B", "C", "D"].map((id) => ({ id, text: id })),
+        answer: null,
+        marks: 1,
+        negativeMarks: 0,
+        media: [],
+      })),
+      slideCount: images.length,
+      issues: [],
+      resolutions: {},
+      reviewed: false,
+    },
+  };
 }

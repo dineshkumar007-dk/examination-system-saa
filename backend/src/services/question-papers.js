@@ -3,7 +3,7 @@ import { randomUUID, createHash } from "node:crypto";
 import { query, transaction } from "../config/database.js";
 import { fail } from "../utils/security.js";
 import { audit } from "./administration.js";
-import { parsePowerPoint } from "./powerpoint.js";
+import { renderPowerPoint } from "./powerpoint.js";
 
 const option = z
   .object({
@@ -34,6 +34,7 @@ const question = z
   .strict();
 const documentSchema = z
   .object({
+    mode: z.literal("slides").optional(),
     questions: z.array(question).max(300),
     issues: z
       .array(
@@ -87,6 +88,11 @@ export function validatePaperDocument(value, totalMarks, publishing = false) {
     if (seen.has(q.number)) fail(400, `Duplicate question number ${q.number}.`);
     seen.add(q.number);
     if (
+      doc.mode === "slides" &&
+      (q.slides.length !== 1 || q.slides[0] > doc.slideCount)
+    )
+      fail(400, `Choose a valid source slide for question ${q.number}.`);
+    if (
       q.prompt.trim().length < 5 ||
       q.options.length < 2 ||
       new Set(q.options.map((o) => o.id)).size !== q.options.length ||
@@ -102,7 +108,7 @@ export function validatePaperDocument(value, totalMarks, publishing = false) {
   }
   if (Math.round(sum * 100) !== Math.round(totalMarks * 100))
     fail(400, `Question marks add up to ${sum}; total marks must match.`);
-  for (const [i] of doc.issues.entries())
+  for (const [i] of (doc.mode === "slides" ? [] : doc.issues).entries())
     if ((doc.resolutions[String(i)] || "").trim().length < 5)
       fail(
         400,
@@ -242,12 +248,23 @@ export async function uploadPaper(
   if (existing.status !== "draft") fail(409, "Only drafts accept uploads.");
   if (existing.revision !== expectedRevision)
     fail(409, "A newer draft exists. Reload before uploading.");
-  const document = await parsePowerPoint(buffer, name);
+  const { document, images } = await renderPowerPoint(buffer, name);
   validatePaperDocument(document, existing.total_marks);
   await transaction(async (c) => {
     const { paper } = await lockedPaper(actor, paperId, c);
     if (paper.revision !== expectedRevision)
       fail(409, "A newer draft exists. Reload before uploading.");
+    await query(
+      "DELETE FROM question_paper_slides WHERE paper_id=?",
+      [paperId],
+      c,
+    );
+    for (const [i, image] of images.entries())
+      await query(
+        "INSERT INTO question_paper_slides(paper_id,slide_number,image_bytes) VALUES(?,?,?)",
+        [paperId, i + 1, image],
+        c,
+      );
     await query(
       "UPDATE question_papers SET document=?,source_name=?,source_sha256=?,source_bytes=?,revision=revision+1,updated_at=UTC_TIMESTAMP(3) WHERE id=?",
       [
@@ -278,7 +295,7 @@ export async function savePaper(
       fail(409, "A newer draft exists. Reload before saving.");
     if (d.durationMinutes !== exam.duration_minutes)
       fail(400, "Paper duration must match the assigned examination.");
-    // Original extraction diagnostics cannot be removed by the client to skip review.
+    // Preserve the server-owned source metadata and paper mode on draft edits.
     const original =
       typeof paper.document === "string"
         ? JSON.parse(paper.document)
@@ -286,6 +303,11 @@ export async function savePaper(
     doc.issues = original.issues;
     doc.slideCount = original.slideCount;
     doc.slides = original.slides;
+    doc.mode = original.mode;
+    if (doc.mode === "slides") {
+      doc.issues = [];
+      doc.resolutions = {};
+    }
     await query(
       "UPDATE question_papers SET title=?,subject=?,description=?,duration_minutes=?,total_marks=?,document=?,revision=revision+1,updated_at=UTC_TIMESTAMP(3) WHERE id=?",
       [
@@ -336,15 +358,25 @@ export async function publishPaper(actor, paperId, expectedRevision) {
       paper.total_marks,
       true,
     );
+    if (doc.mode === "slides") {
+      const assets = await query(
+        "SELECT slide_number FROM question_paper_slides WHERE paper_id=?",
+        [paperId],
+        c,
+      );
+      const available = new Set(assets.map((s) => s.slide_number));
+      if (doc.questions.some((q) => !available.has(q.slides[0])))
+        fail(400, "A slide image is missing. Upload the presentation again.");
+    }
     await query("DELETE FROM questions WHERE exam_id=?", [paper.exam_id], c);
     const rows = doc.questions.map((q, i) => ({
       q,
       id: randomUUID(),
       position: i + 1,
     }));
-    const placeholders = rows.map(() => "(?,?,'MCQ',?,?,?,?,?)").join(",");
+    const placeholders = rows.map(() => "(?,?,'MCQ',?,?,?,?,?,?)").join(",");
     await query(
-      "INSERT INTO questions(id,exam_id,type,prompt,marks,negative_marks,position,media) VALUES " +
+      "INSERT INTO questions(id,exam_id,type,prompt,marks,negative_marks,position,media,slide_number) VALUES " +
         placeholders,
       rows.flatMap(({ q, id, position }) => [
         id,
@@ -354,6 +386,7 @@ export async function publishPaper(actor, paperId, expectedRevision) {
         q.negativeMarks,
         position,
         JSON.stringify(q.media),
+        doc.mode === "slides" ? q.slides[0] : null,
       ]),
       c,
     );
@@ -400,4 +433,14 @@ export async function sourceFile(actor, paperId) {
   );
   if (!row?.source_bytes) fail(404, "No source uploaded.");
   return row;
+}
+
+export async function slideImage(actor, paperId, number) {
+  await getPaper(actor, paperId);
+  const [slide] = await query(
+    "SELECT image_bytes FROM question_paper_slides WHERE paper_id=? AND slide_number=?",
+    [paperId, number],
+  );
+  if (!slide) fail(404, "Slide not found.");
+  return slide.image_bytes;
 }

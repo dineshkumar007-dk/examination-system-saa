@@ -2,6 +2,12 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run build",
   "cleanUrls": true,
+  "functions": {
+    "app.js": {
+      "maxDuration": 60,
+      "includeFiles": "{backend/src/services/slide-render-worker.js,node_modules/@office-kit/pptx-preview/fonts/**}"
+    }
+  },
   "headers": [
     {
       "source": "/(.*)",

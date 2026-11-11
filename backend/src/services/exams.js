@@ -209,7 +209,7 @@ export async function getAttempt(
         serverTime: Date.now(),
       };
     const questions = await query(
-      "SELECT id,type,prompt,marks,negative_marks,position,media FROM questions WHERE exam_id=? ORDER BY position",
+      "SELECT id,type,prompt,marks,negative_marks,position,media,slide_number FROM questions WHERE exam_id=? ORDER BY position",
       [row.exam_id],
       c,
     );
@@ -241,6 +241,17 @@ export async function getAttempt(
       })),
       answers,
     };
+  });
+}
+export async function getAttemptSlide(userId, access, workstation, questionId) {
+  return withAttempt(userId, access, workstation, async (_attempt, row, c) => {
+    const [slide] = await query(
+      "SELECT s.image_bytes FROM questions q JOIN question_papers p ON p.exam_id=q.exam_id AND p.status='published' JOIN question_paper_slides s ON s.paper_id=p.id AND s.slide_number=q.slide_number WHERE q.id=? AND q.exam_id=?",
+      [questionId, row.exam_id],
+      c,
+    );
+    if (!slide) fail(404, "Slide not found.");
+    return { image: slide.image_bytes };
   });
 }
 export function validateAnswer(question, options, answer) {

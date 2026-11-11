@@ -1,5 +1,7 @@
 # Examination portal upgrade — 9 November 2026
 
+The original-slide workflow in [SLIDE-PAPERS.md](SLIDE-PAPERS.md) supersedes the extraction-based workflow below for new uploads. Apply migration 009 before deploying that version. This document records the earlier upgrade.
+
 ## Architecture and compatibility
 
 The application remains React/Vite → Express → managed MySQL over verified TLS. Authentication retains bcrypt, HttpOnly sessions, CSRF, per-role sign-in, persistent rate limits and the administrator's page-memory proof. Candidate accounts continue using the existing `candidate` database role. Invigilator admission, assigned workstation browser credentials, schedules, fee simulation, hall tickets, saved-answer revisions, server deadlines and delayed result publication are preserved.

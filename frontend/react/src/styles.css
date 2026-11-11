@@ -1185,3 +1185,28 @@ tbody tr:hover {
     padding: 22px;
   }
 }
+
+.exam-slide {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  margin: 16px 0;
+  background: white;
+}
+
+.slide-response-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(150px, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.slide-response-grid .option-list {
+  margin-top: 16px;
+}
+@media (max-width: 800px) {
+  .slide-response-grid {
+    grid-template-columns: 1fr;
+  }
+}

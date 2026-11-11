@@ -240,63 +240,84 @@ export function Exam({ navigate }) {
               {q.type} · +{q.marks} / −{q.negative_marks}
             </span>
           </div>
-          <h2>{q.prompt}</h2>
-          {(q.media || []).map((m, i) => (
-            <img
-              className="question-media"
-              key={i}
-              src={`data:${m.mime};base64,${m.data}`}
-              alt={`Question ${index + 1} figure ${i + 1}`}
-            />
-          ))}
-          {q.type === "NAT" ? (
-            <label className="field">
-              <span>Numeric answer</span>
-              <input
-                disabled={locked}
-                type="number"
-                step="any"
-                value={draft ?? ""}
-                onChange={(e) =>
-                  setDraft(
-                    e.target.value === "" ? null : Number(e.target.value),
-                  )
-                }
-              />
-            </label>
-          ) : (
-            <fieldset className="option-list">
-              <legend className="sr-only">
-                {q.type === "MSQ"
-                  ? "Select one or more answers"
-                  : "Select one answer"}
-              </legend>
-              {q.options.map((o) => (
-                <label
-                  className={(draft || []).includes(o.id) ? "chosen" : ""}
-                  key={o.id}
-                >
+          <div className={q.slide_number ? "slide-response-grid" : ""}>
+            <div>
+              {q.slide_number ? (
+                <img
+                  key={q.id}
+                  className="exam-slide"
+                  src={`/api/exam/slides/${q.id}`}
+                  alt={`Original slide ${q.slide_number} for question ${index + 1}`}
+                  onError={() =>
+                    setNotice({
+                      text: "The slide could not load. Check your connection and reload to resume before answering.",
+                      kind: "error",
+                    })
+                  }
+                />
+              ) : (
+                <h2>{q.prompt}</h2>
+              )}
+              {(q.media || []).map((m, i) => (
+                <img
+                  className="question-media"
+                  key={i}
+                  src={`data:${m.mime};base64,${m.data}`}
+                  alt={`Question ${index + 1} figure ${i + 1}`}
+                />
+              ))}
+            </div>
+            <div>
+              {q.type === "NAT" ? (
+                <label className="field">
+                  <span>Numeric answer</span>
                   <input
-                    type={q.type === "MSQ" ? "checkbox" : "radio"}
-                    name="response"
                     disabled={locked}
-                    checked={(draft || []).includes(o.id)}
+                    type="number"
+                    step="any"
+                    value={draft ?? ""}
                     onChange={(e) =>
                       setDraft(
-                        q.type === "MSQ"
-                          ? e.target.checked
-                            ? [...(draft || []), o.id]
-                            : (draft || []).filter((v) => v !== o.id)
-                          : [o.id],
+                        e.target.value === "" ? null : Number(e.target.value),
                       )
                     }
                   />
-                  <span className="option-letter">{o.id}</span>
-                  <span>{o.text}</span>
                 </label>
-              ))}
-            </fieldset>
-          )}
+              ) : (
+                <fieldset className="option-list">
+                  <legend className="sr-only">
+                    {q.type === "MSQ"
+                      ? "Select one or more answers"
+                      : "Select one answer"}
+                  </legend>
+                  {q.options.map((o) => (
+                    <label
+                      className={(draft || []).includes(o.id) ? "chosen" : ""}
+                      key={o.id}
+                    >
+                      <input
+                        type={q.type === "MSQ" ? "checkbox" : "radio"}
+                        name="response"
+                        disabled={locked}
+                        checked={(draft || []).includes(o.id)}
+                        onChange={(e) =>
+                          setDraft(
+                            q.type === "MSQ"
+                              ? e.target.checked
+                                ? [...(draft || []), o.id]
+                                : (draft || []).filter((v) => v !== o.id)
+                              : [o.id],
+                          )
+                        }
+                      />
+                      <span className="option-letter">{o.id}</span>
+                      {!q.slide_number && <span>{o.text}</span>}
+                    </label>
+                  ))}
+                </fieldset>
+              )}
+            </div>
+          </div>
           <div className="exam-actions">
             <button
               className="secondary"

@@ -89,6 +89,31 @@ router.post("/papers/:id/key", async (req, res) => {
     ),
   );
 });
+router.post(
+  "/papers/:id/render",
+  throttle("paper-upload", 10, 3600),
+  async (req, res) => {
+    const paperId = id.parse(req.params.id);
+    const source = await papers.sourceFile(req.user.id, paperId);
+    res.json(
+      await papers.uploadPaper(
+        req.user.id,
+        paperId,
+        revision.parse(req.body.expectedRevision),
+        source.source_bytes,
+        source.source_name,
+      ),
+    );
+  },
+);
+router.get("/papers/:id/slides/:number", async (req, res) => {
+  const image = await papers.slideImage(
+    req.user.id,
+    id.parse(req.params.id),
+    z.coerce.number().int().min(1).max(300).parse(req.params.number),
+  );
+  res.type("png").send(image);
+});
 router.post("/papers/:id/publish", async (req, res) =>
   res.json(
     await papers.publishPaper(

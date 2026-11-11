@@ -10,7 +10,7 @@ This is a separate project. No previous application is imported or modified. Pro
 
 ## Structure
 
-Login provides Candidate, Invigilator, Examiner and Administrator tabs. The server restricts each sign-in to its selected role; administrator tabs and reloads still require fresh password sign-in. Administrators create Examiner accounts and assign examinations. Only assigned Examiners can upload PowerPoint papers, enter keys and publish questions. Administrators cannot author papers or access their keys. See [the upgrade guide](docs/UPGRADE.md) for permissions, upload formats, measurements and setup. Apply migrations through `008_dashboard_indexes.sql` before deploying this version. Existing retired Examiner accounts remain disabled until explicitly reactivated by an administrator.
+Login provides Candidate, Invigilator, Examiner and Administrator tabs. The server restricts each sign-in to its selected role; administrator tabs and reloads still require fresh password sign-in. Administrators create Examiner accounts and assign examinations. Only assigned Examiners can upload PowerPoint papers, enter keys and publish questions. New papers display rendered original slides with a separate answer panel; no question text recognition or extraction review notes are required. See [the slide-paper guide](docs/SLIDE-PAPERS.md) for the current workflow and existing-draft conversion. Administrators cannot author papers or access their keys. See [the upgrade guide](docs/UPGRADE.md) for permissions, upload formats, measurements and setup. Apply migrations through `009_slide_papers.sql` before deploying this version. Existing retired Examiner accounts remain disabled until explicitly reactivated by an administrator.
 
 ```text
 frontend/react/               React screens, shared forms, navy/white CSS
@@ -32,7 +32,7 @@ app.js                       Vercel Express entry point
 vercel.json                  Build, static-page URLs, production headers
 ```
 
-Use Node.js **24 LTS** and npm (minimum supported runtime: 22.12). The isolated module-mocking tests require a recent Node release with `--experimental-test-module-mocks`; Node 24 is verified here. `npm run build` checks JavaScript syntax and bundles React with Vite into `public/`, including route shells for Express and Vercel.
+Use Node.js **24 LTS** and npm (minimum supported runtime: 22.18). The isolated module-mocking tests require a recent Node release with `--experimental-test-module-mocks`; Node 24 is verified here. `npm run build` checks JavaScript syntax and bundles React with Vite into `public/`, including route shells for Express and Vercel.
 
 ## Run locally
 
@@ -122,7 +122,7 @@ All names and placeholders are in `.env.example`:
 
 Invigilators use `/invigilator-login` with their own administrator-created accounts. The server rejects candidate, examiner, and administrator credentials at this dedicated sign-in endpoint. In the invigilator dashboard, **Workstations → Grant exam access to this device** authorizes the browser for a specific center computer and exam slot. Staff then sign out before the assigned candidate signs in. The grant expires at the slot end or after eight hours, whichever is earlier. An ordinary home browser without the grant cannot start or save an exam. This browser authorization does not independently establish physical location: hall-only operation requires supervised devices and a center network or device certificate policy.
 
-1. Administrator creates an examination as draft and assigns an active Examiner. That Examiner uploads a PPTX, verifies extracted MCQs and figures, supplies the answer key manually, and publishes the paper. The administrator controls registration dates and exam activation. Existing MCQ/MSQ/NAT examination records and attempts remain compatible; new uploaded papers use MCQs.
+1. Administrator creates an examination as draft and assigns an active Examiner. That Examiner uploads a PPTX, previews the rendered slides, sets question/slide mappings, choices and marks, supplies the answer key manually, and publishes the paper. The administrator controls registration dates and exam activation. Existing MCQ/MSQ/NAT examination records and attempts remain compatible; new uploaded papers use MCQs.
 2. Candidate creates an account, requests a real email code on `/verify` and verifies it. A pending account can resume through `/resume`, but cannot access protected candidate features. After activation, complete the chosen exam registration from the dashboard. Each examination registration receives unique registration/application IDs.
 3. If there is a fee, the candidate chooses an explicitly simulated successful or failed payment. A successful simulation marks the registration completed. Production payment collection is not implemented.
 4. Operator adds active centers and computer inventory, creates nonoverlapping slots, closes exam registration and allocates eligible candidates. Slot capacity is locked transactionally; overbooking and duplicate PC assignments are rejected.

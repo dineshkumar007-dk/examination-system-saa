@@ -18,16 +18,6 @@ const metadata = (p) => ({
   durationMinutes: Number(p.duration_minutes),
   totalMarks: Number(p.total_marks),
 });
-function Figures({ media = [] }) {
-  return media.map((m, i) => (
-    <img
-      className="question-media"
-      key={i}
-      src={`data:${m.mime};base64,${m.data}`}
-      alt={`Slide figure ${i + 1}`}
-    />
-  ));
-}
 export function Examiner({ user, navigate }) {
   const [view, setView] = useState("Overview"),
     [exams, setExams] = useState([]),
@@ -248,8 +238,8 @@ export function Examiner({ user, navigate }) {
                       Select an examination assigned by the administrator.
                     </li>
                     <li>
-                      Upload PowerPoint slides with numbered MCQs and lettered
-                      options.
+                      Upload your PowerPoint slides and set answer choices and
+                      marks for each question.
                     </li>
                     <li>
                       Verify every slide and enter the correct answers yourself.
@@ -468,15 +458,17 @@ export function Examiner({ user, navigate }) {
                   <section className="panel">
                     <h2>Upload question slides</h2>
                     <p>
-                      Use one numbered question per slide, for example “Question
-                      1: …”, with options “A) …”, “B) …”. Clear continuations
-                      may span slides. Correct answers are never inferred.
+                      Upload your original slides. Their layout, text and
+                      diagrams are displayed together. Enter the answer key
+                      separately; no question text recognition is required.
                     </p>
                     <p className="muted">
-                      Maximum 3 MB and 300 slides. PNG/JPEG figures are
-                      supported; scanned slides, charts and ambiguous layouts
-                      are flagged for review. Legacy PPT needs a configured
-                      converter; use Save As PPTX on Vercel.
+                      Maximum 3 MB and 300 slides. Each slide initially gets one
+                      question with A–D choices. You can skip title slides,
+                      change the choices or add another question for the same
+                      slide. Check the rendered slide appearance before
+                      publishing. Legacy PPT needs a configured converter; use
+                      Save As PPTX on Vercel.
                     </p>
                     {!readonly && (
                       <>
@@ -499,7 +491,7 @@ export function Examiner({ user, navigate }) {
                               if (
                                 doc.questions.length &&
                                 !(await ask(
-                                  "Replace the current extraction and manually entered key with this upload?",
+                                  "Replace the current slides and manually entered key with this upload?",
                                 ))
                               )
                                 return;
@@ -519,7 +511,7 @@ export function Examiner({ user, navigate }) {
                             })
                           }
                         >
-                          {busy ? "Processing…" : "Upload and extract"}
+                          {busy ? "Processing…" : "Upload slides"}
                         </button>
                       </>
                     )}
@@ -532,213 +524,155 @@ export function Examiner({ user, navigate }) {
                       </p>
                     )}
                     <p>
-                      {doc.slideCount} slides · {doc.questions.length} extracted
-                      questions · {doc.issues.length} review issues
+                      {doc.slideCount} slides · {doc.questions.length} questions
                     </p>
                   </section>
                 )}
                 {editorTab === "Question Preview" && (
                   <>
                     <section className="panel">
-                      <h2>Verify extracted content</h2>
+                      <h2>Original slides and answer settings</h2>
                       <p>
-                        Compare the original slide text and figures below with
-                        every question. Correct any omissions before entering
-                        the answer key.
+                        Check each slide and set its question number, choices
+                        and marks. Enter correct answers in Answer Key Entry.
                       </p>
-                      {doc.slides && (
-                        <details>
-                          <summary>
-                            Original extracted slide content (
-                            {doc.slides.length})
-                          </summary>
-                          {doc.slides.map((s) => (
-                            <article className="slide-preview" key={s.number}>
-                              <h3>Slide {s.number}</h3>
-                              <pre>{s.lines.join("\n")}</pre>
-                              <Figures media={s.media} />
-                            </article>
-                          ))}
-                        </details>
-                      )}
-                      {doc.issues.map((issue, i) => (
-                        <label className="field paper-issue" key={i}>
-                          <span>
-                            Slide {issue.slide}: {issue.message}
-                          </span>
-                          <textarea
-                            disabled={readonly || busy}
-                            placeholder="Explain how you corrected or explicitly excluded this content"
-                            value={doc.resolutions[String(i)] || ""}
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              setDoc((d) => ({
-                                ...d,
-                                reviewed: false,
-                                resolutions: { ...d.resolutions, [i]: value },
-                              }));
-                              setDirty(true);
-                            }}
-                          />
-                        </label>
-                      ))}
-                    </section>
-                    {doc.questions.map((q, i) => (
-                      <section className="panel question-editor" key={i}>
-                        <h2>Question {q.number}</h2>
-                        <div className="paper-question-controls">
-                          <label className="field">
-                            <span>Question number</span>
-                            <input
-                              type="number"
-                              min="1"
-                              disabled={readonly || busy}
-                              value={q.number}
-                              onChange={(e) =>
-                                modify(i, { number: Number(e.target.value) })
-                              }
-                            />
-                          </label>
-                          <label className="field">
-                            <span>Marks</span>
-                            <input
-                              type="number"
-                              min="0.01"
-                              step="0.01"
-                              disabled={readonly || busy}
-                              value={q.marks}
-                              onChange={(e) =>
-                                modify(i, { marks: Number(e.target.value) })
-                              }
-                            />
-                          </label>
-                          <label className="field">
-                            <span>Negative marks</span>
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              disabled={readonly || busy}
-                              value={q.negativeMarks}
-                              onChange={(e) =>
-                                modify(i, {
-                                  negativeMarks: Number(e.target.value),
-                                })
-                              }
-                            />
-                          </label>
-                        </div>
-                        <label className="field">
-                          <span>Question text</span>
-                          <textarea
-                            disabled={readonly || busy}
-                            value={q.prompt}
-                            onChange={(e) =>
-                              modify(i, { prompt: e.target.value })
-                            }
-                          />
-                        </label>
-                        <Figures media={q.media} />
-                        {!readonly && (
-                          <label className="field">
-                            <span>Attach figures from original slide</span>
-                            <select
-                              value=""
-                              disabled={busy}
-                              onChange={(e) => {
-                                const slide = doc.slides?.find(
-                                  (s) => s.number === Number(e.target.value),
+                      {doc.mode !== "slides" &&
+                        paper.source_name &&
+                        !readonly && (
+                          <button
+                            disabled={busy}
+                            onClick={() =>
+                              run(async () => {
+                                if (
+                                  doc.questions.length &&
+                                  !(await ask(
+                                    "Switch this draft to original slides? The existing question settings and keys will be replaced.",
+                                  ))
+                                )
+                                  return;
+                                const revision = dirty
+                                  ? await save()
+                                  : paper.revision;
+                                const p = await api(
+                                  `/examiner/papers/${paper.id}/render`,
+                                  "POST",
+                                  { expectedRevision: revision },
                                 );
-                                if (slide) modify(i, { media: slide.media });
-                              }}
-                            >
-                              <option value="">
-                                Choose a slide to replace this question’s
-                                figures
-                              </option>
-                              {(doc.slides || [])
-                                .filter((s) => s.media.length)
-                                .map((s) => (
-                                  <option key={s.number} value={s.number}>
-                                    Slide {s.number}
-                                  </option>
-                                ))}
-                            </select>
-                          </label>
+                                setPaper(p);
+                                setDoc(p.document);
+                                setDetails(metadata(p));
+                                setDirty(false);
+                              })
+                            }
+                          >
+                            Use original slides
+                          </button>
                         )}
-                        {q.options.map((o, j) => (
-                          <div className="paper-option" key={j}>
-                            <select
-                              aria-label={`Question ${q.number} option ${j + 1} letter`}
-                              disabled={readonly || busy}
-                              value={o.id}
-                              onChange={(e) =>
-                                modify(i, {
-                                  options: q.options.map((v, k) =>
-                                    k === j ? { ...v, id: e.target.value } : v,
-                                  ),
-                                })
-                              }
-                            >
-                              {letters.map((l) => (
-                                <option key={l}>{l}</option>
-                              ))}
-                            </select>
-                            <textarea
-                              aria-label={`Question ${q.number} option ${o.id}`}
-                              disabled={readonly || busy}
-                              value={o.text}
-                              onChange={(e) =>
-                                modify(i, {
-                                  options: q.options.map((v, k) =>
-                                    k === j
-                                      ? { ...v, text: e.target.value }
-                                      : v,
-                                  ),
-                                })
-                              }
-                            />
-                            {!readonly && (
-                              <button
-                                className="danger"
-                                aria-label={`Remove option ${o.id}`}
-                                onClick={() =>
+                      {doc.mode !== "slides" && (
+                        <p>
+                          Upload the PowerPoint or select Use original slides to
+                          prepare a slide-based paper. Published older papers
+                          retain their existing exam format.
+                        </p>
+                      )}
+                    </section>
+                    {doc.mode === "slides" &&
+                      doc.questions.map((q, i) => (
+                        <section className="panel question-editor" key={i}>
+                          <h2>
+                            Question {q.number} · Slide {q.slides[0]}
+                          </h2>
+                          <img
+                            className="exam-slide"
+                            src={`/api/examiner/papers/${paper.id}/slides/${q.slides[0]}?revision=${paper.revision}`}
+                            alt={`Original slide ${q.slides[0]}`}
+                          />
+                          <div className="paper-question-controls">
+                            <label className="field">
+                              <span>Question number</span>
+                              <input
+                                type="number"
+                                min="1"
+                                value={q.number}
+                                disabled={readonly || busy}
+                                onChange={(e) =>
+                                  modify(i, { number: Number(e.target.value) })
+                                }
+                              />
+                            </label>
+                            <label className="field">
+                              <span>Source slide</span>
+                              <select
+                                value={q.slides[0]}
+                                disabled={readonly || busy}
+                                onChange={(e) =>
                                   modify(i, {
-                                    options: q.options.filter(
-                                      (_, k) => k !== j,
-                                    ),
+                                    slides: [Number(e.target.value)],
+                                    prompt: `Slide ${e.target.value}`,
+                                  })
+                                }
+                              >
+                                {Array.from(
+                                  { length: doc.slideCount },
+                                  (_, n) => (
+                                    <option key={n} value={n + 1}>
+                                      Slide {n + 1}
+                                    </option>
+                                  ),
+                                )}
+                              </select>
+                            </label>
+                            <label className="field">
+                              <span>Answer choices</span>
+                              <select
+                                value={q.options.length}
+                                disabled={readonly || busy}
+                                onChange={(e) =>
+                                  modify(i, {
+                                    options: letters
+                                      .slice(0, Number(e.target.value))
+                                      .map((id) => ({ id, text: id })),
                                     answer: null,
                                   })
                                 }
                               >
-                                ×
-                              </button>
-                            )}
+                                {[2, 3, 4, 5, 6, 7, 8].map((n) => (
+                                  <option key={n} value={n}>
+                                    {letters.slice(0, n).join(" / ")}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="field">
+                              <span>Marks</span>
+                              <input
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                value={q.marks}
+                                disabled={readonly || busy}
+                                onChange={(e) =>
+                                  modify(i, { marks: Number(e.target.value) })
+                                }
+                              />
+                            </label>
+                            <label className="field">
+                              <span>Negative marks</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={q.negativeMarks}
+                                disabled={readonly || busy}
+                                onChange={(e) =>
+                                  modify(i, {
+                                    negativeMarks: Number(e.target.value),
+                                  })
+                                }
+                              />
+                            </label>
                           </div>
-                        ))}
-                        {!readonly && (
-                          <div className="row-actions">
-                            <button
-                              className="secondary"
-                              disabled={q.options.length >= 8 || busy}
-                              onClick={() =>
-                                modify(i, {
-                                  options: [
-                                    ...q.options,
-                                    {
-                                      id:
-                                        letters.find(
-                                          (l) =>
-                                            !q.options.some((o) => o.id === l),
-                                        ) || "H",
-                                      text: "",
-                                    },
-                                  ],
-                                })
-                              }
-                            >
-                              Add option
-                            </button>
+                          {!readonly && (
                             <button
                               className="danger"
                               disabled={busy}
@@ -753,16 +687,15 @@ export function Examiner({ user, navigate }) {
                                 setDirty(true);
                               }}
                             >
-                              Remove question
+                              Remove question / skip slide
                             </button>
-                          </div>
-                        )}
-                      </section>
-                    ))}
-                    {!readonly && (
+                          )}
+                        </section>
+                      ))}
+                    {doc.mode === "slides" && !readonly && (
                       <button
                         className="secondary"
-                        disabled={busy}
+                        disabled={busy || doc.questions.length >= 300}
                         onClick={() => {
                           setDoc((d) => ({
                             ...d,
@@ -775,23 +708,23 @@ export function Examiner({ user, navigate }) {
                                     0,
                                     ...d.questions.map((q) => q.number),
                                   ) + 1,
-                                prompt: "",
+                                prompt: "Slide 1",
+                                slides: [1],
                                 options: ["A", "B", "C", "D"].map((id) => ({
                                   id,
-                                  text: "",
+                                  text: id,
                                 })),
                                 answer: null,
                                 marks: 1,
                                 negativeMarks: 0,
                                 media: [],
-                                slides: [],
                               },
                             ],
                           }));
                           setDirty(true);
                         }}
                       >
-                        Add missing/transcribed question
+                        Add question for a slide
                       </button>
                     )}
                   </>
@@ -887,7 +820,7 @@ export function Examiner({ user, navigate }) {
                             setDirty(true);
                           }}
                         />
-                        I verified every slide, question, option, review issue
+                        I verified the rendered slides, question settings, marks
                         and answer key.
                       </label>
                       <div className="row-actions">
@@ -906,6 +839,7 @@ export function Examiner({ user, navigate }) {
                         <button
                           disabled={
                             busy ||
+                            doc.mode !== "slides" ||
                             !doc.questions.length ||
                             missing > 0 ||
                             !doc.reviewed

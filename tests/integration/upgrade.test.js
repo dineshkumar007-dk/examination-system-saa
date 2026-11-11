@@ -275,7 +275,18 @@ test(
       );
       assert.equal(attempt.questions.length, 2);
       assert.ok(!JSON.stringify(attempt).includes("correct_answer"));
-      assert.ok(attempt.questions[0].media.length);
+      assert.equal(attempt.questions[0].slide_number, 1);
+      assert.equal(attempt.questions[0].media.length, 0);
+      const slide = await exams.getAttemptSlide(
+        student,
+        login.access,
+        workstation,
+        attempt.questions[0].id,
+      );
+      assert.equal(
+        Buffer.from(slide.image).subarray(0, 8).toString("hex"),
+        "89504e470d0a1a0a",
+      );
       start = performance.now();
       const status = await exams.getAttempt(
         student,

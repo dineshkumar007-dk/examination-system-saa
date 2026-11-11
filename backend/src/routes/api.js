@@ -323,6 +323,17 @@ router.get("/exam/status", roles("candidate"), async (req, res) =>
     ),
   ),
 );
+router.get("/exam/slides/:questionId", roles("candidate"), async (req, res) => {
+  const result = await exam.getAttemptSlide(
+    req.user.id,
+    req.cookies.ep_exam,
+    req.cookies.ep_workstation,
+    id.parse(req.params.questionId),
+  );
+  if (!result.image)
+    return res.status(403).json({ error: "Examination access has ended." });
+  res.type("png").send(result.image);
+});
 router.put("/exam/answer", roles("candidate"), async (req, res) => {
   const d = z
     .object({

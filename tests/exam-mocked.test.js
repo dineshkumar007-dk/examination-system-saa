@@ -47,6 +47,10 @@ mock.module("../backend/src/config/database.js", {
         ];
       if (sql.startsWith("SELECT o.question_id"))
         return [{ question_id: "question", id: "A", text: "First" }];
+      if (sql.startsWith("SELECT s.image_bytes"))
+        return args[0] === "question" && args[1] === "exam"
+          ? [{ image_bytes: Buffer.from("slide pixels") }]
+          : [];
       if (sql.startsWith("SELECT question_id,answer"))
         return state.answer ? [structuredClone(state.answer)] : [];
       if (sql.startsWith("SELECT id,type FROM questions"))
@@ -190,4 +194,41 @@ test("status polling validates admission without querying question/options/answe
         q.includes("student_answers"),
     ),
   );
+});
+
+test("slide images require the candidate's live admitted attempt and an owned question", async () => {
+  setup();
+  const slide = await exams.getAttemptSlide(
+    "owner",
+    "access",
+    "workstation",
+    "question",
+  );
+  assert.equal(slide.image.toString(), "slide pixels");
+  assert.ok(
+    !state.queries.some((q) => /answer_keys|source_bytes|document/.test(q)),
+  );
+  await assert.rejects(
+    exams.getAttemptSlide("other-user", "access", "workstation", "question"),
+    (e) => e.status === 401,
+  );
+  await assert.rejects(
+    exams.getAttemptSlide("owner", "access", "workstation", "other-question"),
+    (e) => e.status === 404,
+  );
+  state.row.computer_active = 0;
+  await assert.rejects(
+    exams.getAttemptSlide("owner", "access", "workstation", "question"),
+    (e) => e.status === 403,
+  );
+  state.row.computer_active = 1;
+  state.attempt.deadline = "2000-01-01 00:00:00";
+  const expired = await exams.getAttemptSlide(
+    "owner",
+    "access",
+    "workstation",
+    "question",
+  );
+  assert.equal(expired.submitted, true);
+  assert.equal(expired.image, undefined);
 });
