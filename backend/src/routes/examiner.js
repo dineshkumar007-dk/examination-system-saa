@@ -24,10 +24,17 @@ router.get("/papers", async (req, res) =>
   ),
 );
 router.post("/papers", json({ limit: "32kb" }), async (req, res) => {
-  const { examId, ...data } = req.body;
+  const { examId, authoringMode = "upload", ...data } = req.body;
   res
     .status(201)
-    .json(await papers.createPaper(req.user.id, id.parse(examId), data));
+    .json(
+      await papers.createPaper(
+        req.user.id,
+        id.parse(examId),
+        data,
+        z.enum(["upload", "manual"]).parse(authoringMode),
+      ),
+    );
 });
 router.get("/papers/:id", async (req, res) =>
   res.json(await papers.getPaper(req.user.id, id.parse(req.params.id))),
@@ -55,6 +62,7 @@ router.post(
       "application/octet-stream",
       "application/vnd.openxmlformats-officedocument.presentationml.presentation",
       "application/vnd.ms-powerpoint",
+      "application/pdf",
     ],
     limit: "3mb",
   }),

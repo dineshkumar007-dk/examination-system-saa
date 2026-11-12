@@ -33,7 +33,7 @@ const question = z
   .strict();
 const documentSchema = z
   .object({
-    mode: z.literal("slides").optional(),
+    mode: z.enum(["slides", "manual"]).optional(),
     questions: z.array(question).max(300),
     issues: z
       .array(
@@ -80,10 +80,15 @@ export function validatePaperDocument(value, totalMarks, publishing = false) {
     }
   if (!publishing) return doc;
   if (!doc.reviewed || !doc.questions.length)
-    fail(400, "Review the slide preview and all questions before publication.");
+    fail(
+      400,
+      "Review all questions, options and answer keys before publication.",
+    );
   const seen = new Set();
   let sum = 0;
   for (const q of doc.questions) {
+    if (doc.mode === "manual" && q.slides.length)
+      fail(400, "Manually typed questions cannot reference uploaded pages.");
     if (seen.has(q.number)) fail(400, `Duplicate question number ${q.number}.`);
     seen.add(q.number);
     if (
@@ -202,7 +207,13 @@ export async function getPaper(actor, paperId) {
   if (!paper) fail(404, "Question paper not found.");
   return paper;
 }
-export async function createPaper(actor, examId, input) {
+export async function createPaper(
+  actor,
+  examId,
+  input,
+  authoringMode = "upload",
+) {
+  z.enum(["upload", "manual"]).parse(authoringMode);
   const d = paperInput.parse(input);
   return transaction(async (c) => {
     const exam = await lockExam(actor, examId, c);
@@ -222,6 +233,7 @@ export async function createPaper(actor, examId, input) {
         d.durationMinutes,
         d.totalMarks,
         JSON.stringify({
+          ...(authoringMode === "manual" ? { mode: "manual" } : {}),
           questions: [],
           issues: [],
           slideCount: 0,
@@ -247,8 +259,9 @@ export async function uploadPaper(
   if (existing.status !== "draft") fail(409, "Only drafts accept uploads.");
   if (existing.revision !== expectedRevision)
     fail(409, "A newer draft exists. Reload before uploading.");
-  const { renderPowerPoint } = await import("./powerpoint.js");
-  const { document, images } = await renderPowerPoint(buffer, name);
+  const { document, images } = name.toLowerCase().endsWith(".pdf")
+    ? await (await import("./pdf-paper.js")).renderPdfPaper(buffer, name)
+    : await (await import("./powerpoint.js")).renderPowerPoint(buffer, name);
   validatePaperDocument(document, existing.total_marks);
   await transaction(async (c) => {
     const { paper } = await lockedPaper(actor, paperId, c);
@@ -330,8 +343,15 @@ export async function publishPaper(actor, paperId, expectedRevision) {
     const { paper, exam } = await lockedPaper(actor, paperId, c);
     if (paper.revision !== expectedRevision)
       fail(409, "Reload the latest paper before publishing.");
-    if (!paper.source_sha256)
-      fail(400, "Upload a PowerPoint before publishing.");
+    const storedDocument =
+      typeof paper.document === "string"
+        ? JSON.parse(paper.document)
+        : paper.document;
+    if (storedDocument.mode !== "manual" && !paper.source_sha256)
+      fail(
+        400,
+        "Upload a PDF/PowerPoint or create a manually typed paper before publishing.",
+      );
     if (paper.duration_minutes !== exam.duration_minutes)
       fail(
         409,
@@ -366,7 +386,7 @@ export async function publishPaper(actor, paperId, expectedRevision) {
       );
       const available = new Set(assets.map((s) => s.slide_number));
       if (doc.questions.some((q) => !available.has(q.slides[0])))
-        fail(400, "A slide image is missing. Upload the presentation again.");
+        fail(400, "A page or slide image is missing. Upload the file again.");
     }
     await query("DELETE FROM questions WHERE exam_id=?", [paper.exam_id], c);
     const rows = doc.questions.map((q, i) => ({

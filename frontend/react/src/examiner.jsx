@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { api, upload, dateText } from "./api.js";
 import { Notice, useConfirm } from "./components.jsx";
 import logo from "./assets/exampro-logo.jpeg";
+import { ManualQuestionEditor } from "./manual-question-editor.jsx";
 import "./examiner.css";
 const tabs = [
   "Overview",
@@ -34,7 +35,8 @@ export function Examiner({ user, navigate }) {
     [notice, setNotice] = useState(null),
     [file, setFile] = useState(null),
     [bulk, setBulk] = useState(""),
-    [editorTab, setEditorTab] = useState("Upload PPT/PPTX"),
+    [editorTab, setEditorTab] = useState("Upload PDF/PPT"),
+    [authoringMode, setAuthoringMode] = useState("upload"),
     [dirty, setDirty] = useState(false);
   const [ask, confirmation] = useConfirm();
   const reload = async () => {
@@ -87,13 +89,15 @@ export function Examiner({ user, navigate }) {
     const p = await api("/examiner/papers/" + id);
     setPaper(p);
     setDetails(metadata(p));
-    setDoc(
-      typeof p.document === "string" ? JSON.parse(p.document) : p.document,
-    );
+    const document =
+      typeof p.document === "string" ? JSON.parse(p.document) : p.document;
+    setDoc(document);
     setFile(null);
     setBulk("");
     setDirty(false);
-    setEditorTab("Upload PPT/PPTX");
+    setEditorTab(
+      document.mode === "manual" ? "Type Questions" : "Upload PDF/PPT",
+    );
   };
   const changeView = async (v) => {
     if (
@@ -160,10 +164,19 @@ export function Examiner({ user, navigate }) {
     </label>
   );
   const readonly = paper?.status === "published";
+  const sourceUnit = paper?.source_name?.toLowerCase().endsWith(".pdf")
+    ? "Page"
+    : "Slide";
   const missing =
     doc?.questions.filter(
       (q) => !q.answer || !q.options.some((o) => o.id === q.answer),
     ).length || 0;
+  const incomplete = doc?.questions.some(
+    (q) =>
+      q.prompt.trim().length < 5 ||
+      q.options.length < 2 ||
+      q.options.some((o) => !o.text.trim()),
+  );
   return (
     <div className="workspace role-examiner">
       <aside className="sidebar">
@@ -379,6 +392,7 @@ export function Examiner({ user, navigate }) {
                       run(async () => {
                         const created = await api("/examiner/papers", "POST", {
                           examId: selection,
+                          authoringMode,
                           ...details,
                         });
                         await open(created.id);
@@ -386,6 +400,40 @@ export function Examiner({ user, navigate }) {
                       });
                     }}
                   >
+                    <fieldset className="paper-methods">
+                      <legend>How would you like to create the paper?</legend>
+                      <label>
+                        <input
+                          type="radio"
+                          name="authoringMode"
+                          value="upload"
+                          checked={authoringMode === "upload"}
+                          onChange={() => setAuthoringMode("upload")}
+                        />
+                        <span>
+                          <strong>Upload PDF or PowerPoint</strong>
+                          <small>
+                            Keep the original pages or slides and enter the
+                            answer key.
+                          </small>
+                        </span>
+                      </label>
+                      <label>
+                        <input
+                          type="radio"
+                          name="authoringMode"
+                          value="manual"
+                          checked={authoringMode === "manual"}
+                          onChange={() => setAuthoringMode("manual")}
+                        />
+                        <span>
+                          <strong>Type questions manually</strong>
+                          <small>
+                            Write questions, options, correct answers and marks.
+                          </small>
+                        </span>
+                      </label>
+                    </fieldset>
                     <div className="form-grid">
                       <label className="field">
                         <span>Assigned examination</span>
@@ -440,8 +488,10 @@ export function Examiner({ user, navigate }) {
                   </div>
                   <div className="paper-editor-tabs">
                     {[
-                      "Upload PPT/PPTX",
-                      "Question Preview",
+                      "Upload PDF/PPT",
+                      doc.mode === "manual"
+                        ? "Type Questions"
+                        : "Question Preview",
                       "Answer Key Entry",
                     ].map((t) => (
                       <button
@@ -454,28 +504,28 @@ export function Examiner({ user, navigate }) {
                     ))}
                   </div>
                 </section>
-                {editorTab === "Upload PPT/PPTX" && (
+                {editorTab === "Upload PDF/PPT" && (
                   <section className="panel">
-                    <h2>Upload question slides</h2>
+                    <h2>Upload your question paper</h2>
                     <p>
-                      Upload your original slides. Their layout, text and
-                      diagrams are displayed together. Enter the answer key
-                      separately; no question text recognition is required.
+                      Upload a PDF or PowerPoint. Its layout, text and diagrams
+                      are displayed together. Enter the correct answers in
+                      Answer Key Entry.
                     </p>
                     <p className="muted">
-                      Maximum 3 MB and 300 slides. Each slide initially gets one
-                      question with A–D choices. You can skip title slides,
-                      change the choices or add another question for the same
-                      slide. Check the rendered slide appearance before
-                      publishing. Legacy PPT needs a configured converter; use
-                      Save As PPTX on Vercel.
+                      Maximum 3 MB, 100 PDF pages or 300 PowerPoint slides. Each
+                      page or slide initially gets one question with A–D
+                      choices. You can skip cover pages, change the choices or
+                      add another question for the same page or slide. Check the
+                      page previews before publishing. Legacy PPT needs a
+                      configured converter; use Save As PPTX on Vercel.
                     </p>
                     {!readonly && (
                       <>
                         <input
-                          aria-label="PowerPoint question paper"
+                          aria-label="PDF or PowerPoint question paper"
                           type="file"
-                          accept=".pptx,.ppt"
+                          accept=".pdf,.pptx,.ppt"
                           disabled={busy}
                           onChange={(e) => setFile(e.target.files[0] || null)}
                         />
@@ -486,12 +536,12 @@ export function Examiner({ user, navigate }) {
                             run(async () => {
                               if (file.size > 3 * 1024 * 1024)
                                 throw new Error(
-                                  "The PowerPoint must be no larger than 3 MB.",
+                                  "The file must be no larger than 3 MB.",
                                 );
                               if (
                                 doc.questions.length &&
                                 !(await ask(
-                                  "Replace the current slides and manually entered key with this upload?",
+                                  "Replace the current questions and answer key with this upload?",
                                 ))
                               )
                                 return;
@@ -511,7 +561,7 @@ export function Examiner({ user, navigate }) {
                             })
                           }
                         >
-                          {busy ? "Processing…" : "Upload slides"}
+                          {busy ? "Processing…" : "Upload file"}
                         </button>
                       </>
                     )}
@@ -524,17 +574,30 @@ export function Examiner({ user, navigate }) {
                       </p>
                     )}
                     <p>
-                      {doc.slideCount} slides · {doc.questions.length} questions
+                      {doc.slideCount} pages/slides · {doc.questions.length}{" "}
+                      questions
                     </p>
                   </section>
+                )}
+                {editorTab === "Type Questions" && doc.mode === "manual" && (
+                  <ManualQuestionEditor
+                    document={doc}
+                    disabled={busy}
+                    readonly={readonly}
+                    onChange={(update) => {
+                      setDoc((d) => ({ ...update(d), reviewed: false }));
+                      setDirty(true);
+                    }}
+                  />
                 )}
                 {editorTab === "Question Preview" && (
                   <>
                     <section className="panel">
-                      <h2>Original slides and answer settings</h2>
+                      <h2>Original pages and answer settings</h2>
                       <p>
-                        Check each slide and set its question number, choices
-                        and marks. Enter correct answers in Answer Key Entry.
+                        Check each page or slide and set its question number,
+                        choices and marks. Enter correct answers in Answer Key
+                        Entry.
                       </p>
                       {doc.mode !== "slides" &&
                         paper.source_name &&
@@ -580,12 +643,12 @@ export function Examiner({ user, navigate }) {
                       doc.questions.map((q, i) => (
                         <section className="panel question-editor" key={i}>
                           <h2>
-                            Question {q.number} · Slide {q.slides[0]}
+                            Question {q.number} · {sourceUnit} {q.slides[0]}
                           </h2>
                           <img
                             className="exam-slide"
                             src={`/api/examiner/papers/${paper.id}/slides/${q.slides[0]}?revision=${paper.revision}`}
-                            alt={`Original slide ${q.slides[0]}`}
+                            alt={`Original ${sourceUnit.toLowerCase()} ${q.slides[0]}`}
                           />
                           <div className="paper-question-controls">
                             <label className="field">
@@ -601,14 +664,14 @@ export function Examiner({ user, navigate }) {
                               />
                             </label>
                             <label className="field">
-                              <span>Source slide</span>
+                              <span>Source {sourceUnit.toLowerCase()}</span>
                               <select
                                 value={q.slides[0]}
                                 disabled={readonly || busy}
                                 onChange={(e) =>
                                   modify(i, {
                                     slides: [Number(e.target.value)],
-                                    prompt: `Slide ${e.target.value}`,
+                                    prompt: `${sourceUnit} ${e.target.value}`,
                                   })
                                 }
                               >
@@ -616,7 +679,7 @@ export function Examiner({ user, navigate }) {
                                   { length: doc.slideCount },
                                   (_, n) => (
                                     <option key={n} value={n + 1}>
-                                      Slide {n + 1}
+                                      {sourceUnit} {n + 1}
                                     </option>
                                   ),
                                 )}
@@ -687,7 +750,7 @@ export function Examiner({ user, navigate }) {
                                 setDirty(true);
                               }}
                             >
-                              Remove question / skip slide
+                              Remove question / skip page
                             </button>
                           )}
                         </section>
@@ -724,7 +787,7 @@ export function Examiner({ user, navigate }) {
                           setDirty(true);
                         }}
                       >
-                        Add question for a slide
+                        Add question for a page/slide
                       </button>
                     )}
                   </>
@@ -807,6 +870,12 @@ export function Examiner({ user, navigate }) {
                     {details.totalMarks} marks
                     {dirty ? " · Unsaved changes" : ""}
                   </p>
+                  {incomplete && (
+                    <p className="muted">
+                      Complete the question text and every answer option before
+                      publishing.
+                    </p>
+                  )}
                   {!readonly && (
                     <>
                       <label className="review-confirm">
@@ -820,8 +889,8 @@ export function Examiner({ user, navigate }) {
                             setDirty(true);
                           }}
                         />
-                        I verified the rendered slides, question settings, marks
-                        and answer key.
+                        I verified the questions, answer options, marks and
+                        answer key.
                       </label>
                       <div className="row-actions">
                         <button
@@ -839,9 +908,10 @@ export function Examiner({ user, navigate }) {
                         <button
                           disabled={
                             busy ||
-                            doc.mode !== "slides" ||
+                            !["slides", "manual"].includes(doc.mode) ||
                             !doc.questions.length ||
                             missing > 0 ||
+                            incomplete ||
                             !doc.reviewed
                           }
                           onClick={() =>

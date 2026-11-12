@@ -75,7 +75,7 @@ test("ordinary server startup does not initialize native slide rendering librari
       `
     import { registerHooks } from "node:module";
     registerHooks({ resolve(specifier, context, next) {
-      if (specifier.startsWith("@office-kit/") || specifier.endsWith("/powerpoint.js")) throw Error("Eager slide renderer: " + specifier);
+      if (specifier.startsWith("@office-kit/") || specifier.startsWith("pdfjs-dist/") || specifier.startsWith("@napi-rs/canvas") || specifier.endsWith("/powerpoint.js") || specifier.endsWith("/pdf-paper.js")) throw Error("Eager paper renderer: " + specifier);
       return next(specifier, context);
     } });
     await import("./backend/src/app.js");
