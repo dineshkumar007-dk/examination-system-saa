@@ -10,7 +10,22 @@ export function LoginPage({ role = "candidate", login, navigate }) {
   const [identity, setIdentity] = useState(""),
     [password, setPassword] = useState(""),
     [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [retryUntil, setRetryUntil] = useState(0),
+    [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!retryUntil) return;
+    const timer = setInterval(() => {
+      const time = Date.now();
+      setNow(time);
+      if (time >= retryUntil) {
+        setRetryUntil(0);
+        setError("");
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [retryUntil]);
+  const remaining = Math.max(0, Math.ceil((retryUntil - now) / 1000));
   const roles = [
     {
       key: "examiner",
@@ -120,12 +135,18 @@ export function LoginPage({ role = "candidate", login, navigate }) {
         <form
           onSubmit={async (e) => {
             e.preventDefault();
+            if (busy || remaining > 0) return;
             setBusy(true);
             setError("");
             try {
               await login({ identity, password }, role);
             } catch (err) {
               setError(err.message);
+              if (err.status === 429) {
+                const time = Date.now();
+                setNow(time);
+                setRetryUntil(time + (err.retryAfter || 60) * 1000);
+              }
             } finally {
               setBusy(false);
             }
@@ -169,8 +190,16 @@ export function LoginPage({ role = "candidate", login, navigate }) {
               {error}
             </p>
           )}
-          <button className="signin-submit" disabled={busy} type="submit">
-            {busy ? "Signing in…" : "Sign in"}
+          <button
+            className="signin-submit"
+            disabled={busy || remaining > 0}
+            type="submit"
+          >
+            {busy
+              ? "Signing in…"
+              : remaining > 0
+                ? `Try again in ${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, "0")}`
+                : "Sign in"}
             <Icon name="arrow" size={18} />
           </button>
         </form>

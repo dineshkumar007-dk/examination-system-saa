@@ -54,6 +54,8 @@ export async function api(path, method = "GET", body) {
           : ""),
     );
     e.status = r.status;
+    if (r.status === 429)
+      e.retryAfter = Number(d.retryAfter || r.headers.get("Retry-After")) || 60;
     throw e;
   }
   return d;

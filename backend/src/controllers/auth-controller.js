@@ -8,7 +8,11 @@ import {
   signup as signupSchema,
 } from "../utils/validation.js";
 import { digest, fail } from "../utils/security.js";
-import { createSession, cookieOptions } from "../middleware/security.js";
+import {
+  createSession,
+  cookieOptions,
+  resetLoginAttempts,
+} from "../middleware/security.js";
 import * as auth from "../services/auth.js";
 import * as admin from "../services/administration.js";
 import { issueAdminAccess } from "../middleware/admin-access.js";
@@ -24,12 +28,13 @@ export const signUp = async (req, res) => {
 const signIn = async (req, res, requiredRole) => {
   const d = z
     .object({
-      identity: z.string().min(3).max(254),
+      identity: z.string().trim().min(3).max(254),
       password: z.string().min(1).max(100),
     })
     .strict()
     .parse(req.body);
   const user = await auth.login(d.identity, d.password, requiredRole);
+  await resetLoginAttempts(d.identity);
   if (req.cookies.ep_session)
     await query("DELETE FROM sessions WHERE token_hash=?", [
       digest(req.cookies.ep_session),

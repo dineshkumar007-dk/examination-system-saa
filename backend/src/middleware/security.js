@@ -55,19 +55,37 @@ export async function rateLimit(key, maximum, seconds) {
     !Number.isInteger(result.insertId) ||
     result.insertId < 1 ||
     result.insertId > maximum
-  )
-    fail(429, "Too many requests. Please wait before trying again.");
+  ) {
+    const [window] = await query(
+      "SELECT GREATEST(1,CEIL(TIMESTAMPDIFF(MICROSECOND,UTC_TIMESTAMP(3),resets_at)/1000000)) AS retry_after FROM rate_limits WHERE bucket_key=?",
+      [digest(`rate:${key}`)],
+    );
+    const retryAfter = Math.max(
+      1,
+      Math.min(seconds, Number(window?.retry_after) || seconds),
+    );
+    throw Object.assign(
+      new Error(
+        `Too many requests. Try again in ${Math.ceil(retryAfter / 60)} minute(s).`,
+      ),
+      {
+        status: 429,
+        expose: true,
+        retryAfter,
+      },
+    );
+  }
 }
 export const throttle =
-  (name, maximum = 20, seconds = 900) =>
+  (name, maximum = 20, seconds = 900, ipMaximum = maximum) =>
   async (req, res, next) => {
     try {
-      await rateLimit(`${name}:${req.ip}`, maximum, seconds);
+      await rateLimit(`${name}:${req.ip}`, ipMaximum, seconds);
       const identity =
         req.body?.email || req.body?.identity || req.body?.registrationNumber;
       if (identity)
         await rateLimit(
-          `${name}:identity:${String(identity).toLowerCase()}`,
+          `${name}:identity:${String(identity).trim().toLowerCase()}`,
           maximum,
           seconds,
         );
@@ -76,6 +94,18 @@ export const throttle =
       next(e);
     }
   };
+// Campus workstations share an internet address. Keep a separate, tighter
+// account limit; successful password verification clears only that account.
+// Version the scope because the old counters also included successful logins.
+const loginScope = "login-v2";
+export const loginThrottle = throttle(loginScope, 10, 900, 300);
+export async function resetLoginAttempts(identity) {
+  await query("DELETE FROM rate_limits WHERE bucket_key=?", [
+    digest(
+      `rate:${loginScope}:identity:${String(identity).trim().toLowerCase()}`,
+    ),
+  ]);
+}
 export async function createSession(userId, res, connection) {
   const value = token();
   await query(
@@ -161,7 +191,8 @@ export function errorHandler(error, req, res, _next) {
     return res
       .status(413)
       .json({ error: "Request exceeds the permitted size." });
-  if (error.status === 429) res.set("Retry-After", "60");
+  if (error.status === 429)
+    res.set("Retry-After", String(error.retryAfter || 60));
   if (!error.expose)
     console.error(
       JSON.stringify({
@@ -171,6 +202,7 @@ export function errorHandler(error, req, res, _next) {
       }),
     );
   res.status(error.status || 500).json({
+    ...(error.status === 429 ? { retryAfter: error.retryAfter || 60 } : {}),
     error: error.expose
       ? error.message
       : "The service is unavailable. Please retry or contact the examination authority.",

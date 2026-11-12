@@ -22,6 +22,7 @@ import {
   roles,
   csrfIssue,
   throttle,
+  loginThrottle,
   cookieOptions,
   centerScope,
 } from "../middleware/security.js";
@@ -77,16 +78,12 @@ router.get("/examinations", async (req, res) => {
   );
 });
 router.post("/auth/signup", throttle("signup", 5, 3600), controllers.signUp);
-router.post("/auth/login", throttle("login", 10), controllers.logIn);
-router.post("/auth/admin-login", throttle("login", 10), controllers.adminLogIn);
-router.post(
-  "/auth/examiner-login",
-  throttle("login", 10),
-  controllers.examinerLogIn,
-);
+router.post("/auth/login", loginThrottle, controllers.logIn);
+router.post("/auth/admin-login", loginThrottle, controllers.adminLogIn);
+router.post("/auth/examiner-login", loginThrottle, controllers.examinerLogIn);
 router.post(
   "/auth/invigilator-login",
-  throttle("login", 10),
+  loginThrottle,
   controllers.invigilatorLogIn,
 );
 router.post(

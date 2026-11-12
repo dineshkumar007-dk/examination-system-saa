@@ -121,3 +121,17 @@ test("a failed speculative CSRF request is retried on submission", async (t) => 
   await api("/auth/login", "POST", {});
   assert.equal(requests, 2);
 });
+
+test("API errors expose the server's actual retry delay to the login screen", async (t) => {
+  const { api } = await import("../frontend/react/src/api.js?rate-limit");
+  t.mock.method(globalThis, "fetch", async () =>
+    Response.json(
+      { error: "Wait before signing in", retryAfter: 735 },
+      { status: 429, headers: { "Retry-After": "735" } },
+    ),
+  );
+  await assert.rejects(
+    api("/me"),
+    (error) => error.status === 429 && error.retryAfter === 735,
+  );
+});
