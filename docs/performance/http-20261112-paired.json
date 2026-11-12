@@ -1,0 +1,37 @@
+{
+  "mode": "20261112-paired",
+  "recordedAt": "2026-11-12T06:36:31.261Z",
+  "samples": 1,
+  "target": "https://examination-system-saa.vercel.app",
+  "note": "Six warm pairs of serial (old) versus parallel (new) Users-page HTTP request scheduling in one production session, with alternating order. Includes network/platform delays; no browser paint measurement.",
+  "loginMs": [
+    2403.38
+  ],
+  "overviewWorkflowMs": [
+    952.3
+  ],
+  "navigation": {
+    "serialMs": [
+      1562.51,
+      2030.61,
+      1479.44,
+      1620.28,
+      1483.01,
+      1973.77
+    ],
+    "parallelMs": [
+      732.45,
+      2364.12,
+      793.06,
+      929.58,
+      773.08,
+      718.96
+    ],
+    "pairs": 6,
+    "serialP50ms": 1591.395,
+    "parallelP50ms": 783.0699999999999
+  },
+  "adminAuthoringDenied": true,
+  "loginP50ms": 2403.38,
+  "overviewP50ms": 952.3
+}
