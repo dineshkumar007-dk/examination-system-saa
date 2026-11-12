@@ -60,6 +60,13 @@ app.use(
     maxAge: 0,
     setHeaders: (res, filePath) => {
       if (filePath.endsWith(".html")) res.set("Cache-Control", "no-store");
+      else if (
+        filePath.startsWith(path.join(root, "public", "assets") + path.sep) &&
+        /-[A-Za-z0-9_-]{8,}\.(?:js|css|jpe?g|png|svg|webp|woff2?)$/.test(
+          path.basename(filePath),
+        )
+      )
+        res.set("Cache-Control", "public, max-age=31536000, immutable");
     },
   }),
 );

@@ -1,9 +1,26 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import request from "supertest";
+import { readdir } from "node:fs/promises";
 import app from "../app.js";
 process.env.APP_URL = "http://localhost:3000";
 process.env.APP_SECRET = "c".repeat(64);
+test("fingerprinted public assets are immutable while pages and private APIs stay uncached", async () => {
+  const files = await readdir(new URL("../public/assets/", import.meta.url));
+  const script = files.find((name) => /^index-.*\.js$/.test(name));
+  assert.ok(script, "Build the React assets before this test");
+  const asset = await request(app).get("/assets/" + script);
+  assert.equal(asset.status, 200);
+  assert.equal(
+    asset.headers["cache-control"],
+    "public, max-age=31536000, immutable",
+  );
+  const page = await request(app).get("/login");
+  assert.equal(page.headers["cache-control"], "no-store");
+  const privateApi = await request(app).get("/api/manage/overview");
+  assert.equal(privateApi.status, 401);
+  assert.equal(privateApi.headers["cache-control"], "no-store");
+});
 test("public pages and Bootstrap assets serve with security headers", async () => {
   for (const path of [
     "/",

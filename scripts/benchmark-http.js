@@ -7,7 +7,8 @@ const baseline = process.argv.includes("--baseline"),
   origin = "https://examination-system-saa.vercel.app";
 const latencyBefore = process.argv.includes("--latency-before"),
   latencyAfter = process.argv.includes("--latency-after"),
-  latency = latencyBefore || latencyAfter;
+  latency = latencyBefore || latencyAfter,
+  paired = process.argv.includes("--navigation-paired");
 if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD)
   throw Error("Configure benchmark operator credentials locally.");
 const cookies = new Map();
@@ -38,13 +39,15 @@ async function call(path, method = "GET", body, expectedStatus) {
   return data;
 }
 const result = {
-  mode: latency
-    ? `20261112-${latencyBefore ? "before" : "after"}`
-    : baseline
-      ? "baseline"
-      : "after",
+  mode: paired
+    ? "20261112-paired"
+    : latency
+      ? `20261112-${latencyBefore ? "before" : "after"}`
+      : baseline
+        ? "baseline"
+        : "after",
   recordedAt: new Date().toISOString(),
-  samples: 3,
+  samples: paired ? 1 : 3,
   target: origin,
   note: "Real HTTP sign-in and reconstructed dashboard request path. Includes platform/network delays; no browser paint measurement.",
   loginMs: [],
@@ -52,7 +55,7 @@ const result = {
   ...(latency ? { usersWorkflowMs: [], csrfMs: [] } : {}),
 };
 try {
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < result.samples; i++) {
     const csrfStart = performance.now();
     csrf = (await call("/csrf")).token;
     if (latency)
@@ -79,6 +82,44 @@ try {
     result.overviewWorkflowMs.push(
       Number((performance.now() - start).toFixed(2)),
     );
+    if (paired) {
+      const users = () => call("/manage/users?page=1&limit=25&search=");
+      const centers = () => call("/manage/centers");
+      const serial = async () => {
+        await centers();
+        await users();
+      };
+      const parallel = () => Promise.all([centers(), users()]);
+      // Warm both paths, then alternate ordering to reduce cold-start/order bias.
+      await serial();
+      await parallel();
+      result.navigation = { serialMs: [], parallelMs: [], pairs: 6 };
+      for (let n = 0; n < 6; n++) {
+        for (const [key, fn] of n % 2
+          ? [
+              ["parallelMs", parallel],
+              ["serialMs", serial],
+            ]
+          : [
+              ["serialMs", serial],
+              ["parallelMs", parallel],
+            ]) {
+          const begin = performance.now();
+          await fn();
+          result.navigation[key].push(
+            Number((performance.now() - begin).toFixed(2)),
+          );
+        }
+      }
+      const median = (values) => {
+        const s = values.toSorted((a, b) => a - b);
+        return (s[2] + s[3]) / 2;
+      };
+      result.navigation.serialP50ms = median(result.navigation.serialMs);
+      result.navigation.parallelP50ms = median(result.navigation.parallelMs);
+      result.note =
+        "Six warm pairs of serial (old) versus parallel (new) Users-page HTTP request scheduling in one production session, with alternating order. Includes network/platform delays; no browser paint measurement.";
+    }
     if (latency) {
       start = performance.now();
       if (latencyBefore) {
@@ -99,12 +140,26 @@ try {
       await call("/examiner/papers", "POST", {}, 403);
       await call("/manage/questions", "GET", undefined, 403);
       result.adminAuthoringDenied = true;
+      if (latencyAfter) {
+        const activeProof = proof;
+        try {
+          proof = undefined;
+          await call("/manage/overview", "GET", undefined, 401);
+          result.freshAdminPageDenied = true;
+        } finally {
+          proof = activeProof;
+        }
+      }
     }
     await call("/auth/logout", "POST", {});
     proof = undefined;
   }
-  result.loginP50ms = result.loginMs.toSorted((a, b) => a - b)[1];
-  result.overviewP50ms = result.overviewWorkflowMs.toSorted((a, b) => a - b)[1];
+  result.loginP50ms = result.loginMs.toSorted((a, b) => a - b)[
+    Math.floor(result.samples / 2)
+  ];
+  result.overviewP50ms = result.overviewWorkflowMs.toSorted((a, b) => a - b)[
+    Math.floor(result.samples / 2)
+  ];
   if (latency) {
     result.usersP50ms = result.usersWorkflowMs.toSorted((a, b) => a - b)[1];
     result.csrfP50ms = result.csrfMs.toSorted((a, b) => a - b)[1];
