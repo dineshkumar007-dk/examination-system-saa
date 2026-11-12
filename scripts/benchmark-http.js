@@ -5,6 +5,9 @@ import { performance } from "node:perf_hooks";
 import { mkdir, writeFile } from "node:fs/promises";
 const baseline = process.argv.includes("--baseline"),
   origin = "https://examination-system-saa.vercel.app";
+const latencyBefore = process.argv.includes("--latency-before"),
+  latencyAfter = process.argv.includes("--latency-after"),
+  latency = latencyBefore || latencyAfter;
 if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD)
   throw Error("Configure benchmark operator credentials locally.");
 const cookies = new Map();
@@ -35,17 +38,25 @@ async function call(path, method = "GET", body, expectedStatus) {
   return data;
 }
 const result = {
-  mode: baseline ? "baseline" : "after",
+  mode: latency
+    ? `20261112-${latencyBefore ? "before" : "after"}`
+    : baseline
+      ? "baseline"
+      : "after",
   recordedAt: new Date().toISOString(),
   samples: 3,
   target: origin,
   note: "Real HTTP sign-in and reconstructed dashboard request path. Includes platform/network delays; no browser paint measurement.",
   loginMs: [],
   overviewWorkflowMs: [],
+  ...(latency ? { usersWorkflowMs: [], csrfMs: [] } : {}),
 };
 try {
   for (let i = 0; i < 3; i++) {
+    const csrfStart = performance.now();
     csrf = (await call("/csrf")).token;
+    if (latency)
+      result.csrfMs.push(Number((performance.now() - csrfStart).toFixed(2)));
     let start = performance.now();
     const u = await call("/auth/admin-login", "POST", {
       identity: process.env.ADMIN_EMAIL,
@@ -68,6 +79,21 @@ try {
     result.overviewWorkflowMs.push(
       Number((performance.now() - start).toFixed(2)),
     );
+    if (latency) {
+      start = performance.now();
+      if (latencyBefore) {
+        await call("/manage/centers");
+        await call("/manage/users?page=1&limit=25&search=");
+      } else {
+        await Promise.all([
+          call("/manage/centers"),
+          call("/manage/users?page=1&limit=25&search="),
+        ]);
+      }
+      result.usersWorkflowMs.push(
+        Number((performance.now() - start).toFixed(2)),
+      );
+    }
     if (!baseline && i === 0) {
       await call("/examiner/papers", "GET", undefined, 403);
       await call("/examiner/papers", "POST", {}, 403);
@@ -79,6 +105,10 @@ try {
   }
   result.loginP50ms = result.loginMs.toSorted((a, b) => a - b)[1];
   result.overviewP50ms = result.overviewWorkflowMs.toSorted((a, b) => a - b)[1];
+  if (latency) {
+    result.usersP50ms = result.usersWorkflowMs.toSorted((a, b) => a - b)[1];
+    result.csrfP50ms = result.csrfMs.toSorted((a, b) => a - b)[1];
+  }
   await mkdir("docs/performance", { recursive: true });
   await writeFile(
     `docs/performance/http-${result.mode}.json`,

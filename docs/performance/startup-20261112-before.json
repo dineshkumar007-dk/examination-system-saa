@@ -1,0 +1,20 @@
+{
+  "recordedAt": "2026-11-12T06:24:49.072Z",
+  "mode": "before",
+  "samples": [
+    {
+      "importMs": 891.9884999999999,
+      "rssMB": 109.94921875
+    },
+    {
+      "importMs": 910.4928,
+      "rssMB": 108.3203125
+    },
+    {
+      "importMs": 814.6422,
+      "rssMB": 109.125
+    }
+  ],
+  "importP50ms": 891.9884999999999,
+  "note": "Three fresh local Node processes importing the Express application. Not a hosted cold-start or browser measurement."
+}

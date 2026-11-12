@@ -1,0 +1,13 @@
+{
+  "recordedAt": "2026-11-12T06:27:32.843Z",
+  "database": "isolated test database",
+  "note": "HTTP timings include managed-DB network RTT; fixture passwords use bcrypt cost 4, not production cost 12.",
+  "ms": {
+    "adminHttpLogin": 351.41,
+    "examinerHttpLogin": 216.07,
+    "candidateHttpLogin": 180.08,
+    "questionRetrieval": 691.08,
+    "statusPolling": 268.42,
+    "submitAttempt": 590.08
+  }
+}

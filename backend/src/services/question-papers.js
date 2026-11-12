@@ -3,7 +3,6 @@ import { randomUUID, createHash } from "node:crypto";
 import { query, transaction } from "../config/database.js";
 import { fail } from "../utils/security.js";
 import { audit } from "./administration.js";
-import { renderPowerPoint } from "./powerpoint.js";
 
 const option = z
   .object({
@@ -248,6 +247,7 @@ export async function uploadPaper(
   if (existing.status !== "draft") fail(409, "Only drafts accept uploads.");
   if (existing.revision !== expectedRevision)
     fail(409, "A newer draft exists. Reload before uploading.");
+  const { renderPowerPoint } = await import("./powerpoint.js");
   const { document, images } = await renderPowerPoint(buffer, name);
   validatePaperDocument(document, existing.total_marks);
   await transaction(async (c) => {

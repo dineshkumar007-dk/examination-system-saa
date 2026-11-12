@@ -1,0 +1,32 @@
+{
+  "mode": "20261112-before",
+  "recordedAt": "2026-11-12T06:27:31.157Z",
+  "samples": 3,
+  "target": "https://examination-system-saa.vercel.app",
+  "note": "Real HTTP sign-in and reconstructed dashboard request path. Includes platform/network delays; no browser paint measurement.",
+  "loginMs": [
+    1887.08,
+    1426.54,
+    1438.66
+  ],
+  "overviewWorkflowMs": [
+    964.99,
+    739.64,
+    747.39
+  ],
+  "usersWorkflowMs": [
+    1725.56,
+    1537.96,
+    1468.58
+  ],
+  "csrfMs": [
+    698.84,
+    361.51,
+    303.33
+  ],
+  "adminAuthoringDenied": true,
+  "loginP50ms": 1438.66,
+  "overviewP50ms": 747.39,
+  "usersP50ms": 1537.96,
+  "csrfP50ms": 361.51
+}

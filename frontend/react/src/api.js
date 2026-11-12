@@ -1,4 +1,4 @@
-let csrf, adminAccess;
+let csrf, csrfRequest, adminAccess;
 async function fetchChecked(url, options = {}) {
   try {
     return await fetch(url, {
@@ -16,13 +16,25 @@ async function fetchChecked(url, options = {}) {
 export function setAdminAccess(value) {
   adminAccess = value || undefined;
 }
-export async function api(path, method = "GET", body) {
-  if (method !== "GET" && !csrf) {
-    const r = await fetchChecked("/api/csrf", { cache: "no-store" });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.error);
-    csrf = d.token;
+// Share a single token request between login-page preparation and submission.
+// Rejected preparation is retryable; tokens remain in page memory only.
+export async function prepareCsrf() {
+  if (csrf) return csrf;
+  if (!csrfRequest) {
+    csrfRequest = (async () => {
+      const r = await fetchChecked("/api/csrf", { cache: "no-store" });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      csrf = d.token;
+      return csrf;
+    })().finally(() => {
+      csrfRequest = undefined;
+    });
   }
+  return csrfRequest;
+}
+export async function api(path, method = "GET", body) {
+  if (method !== "GET") await prepareCsrf();
   const r = await fetchChecked("/api" + path, {
     method,
     cache: "no-store",
@@ -47,12 +59,7 @@ export async function api(path, method = "GET", body) {
   return d;
 }
 export async function upload(path, file) {
-  if (!csrf) {
-    const r = await fetchChecked("/api/csrf", { cache: "no-store" });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error);
-    csrf = data.token;
-  }
+  await prepareCsrf();
   const r = await fetchChecked("/api" + path, {
     method: "POST",
     cache: "no-store",

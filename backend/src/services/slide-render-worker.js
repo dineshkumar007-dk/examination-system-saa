@@ -4,11 +4,18 @@ import {
   Worker,
   isMainThread,
 } from "node:worker_threads";
-import { loadPresentation, getSlides, getSlideSize } from "@office-kit/pptx";
-import { renderSlideToImage } from "@office-kit/pptx-preview/node";
 
 if (!isMainThread) {
   try {
+    // Native canvas and font modules are needed only by the rendering worker.
+    // Ordinary authentication/dashboard requests must not initialize them.
+    const [
+      { loadPresentation, getSlides, getSlideSize },
+      { renderSlideToImage },
+    ] = await Promise.all([
+      import("@office-kit/pptx"),
+      import("@office-kit/pptx-preview/node"),
+    ]);
     const presentation = await loadPresentation(new Uint8Array(workerData));
     const size = getSlideSize(presentation);
     if (

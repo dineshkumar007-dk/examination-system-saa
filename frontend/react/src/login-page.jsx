@@ -1,8 +1,12 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { prepareCsrf } from "./api.js";
 import { Icon } from "./illustrations.jsx";
 import { Password } from "./components.jsx";
 
 export function LoginPage({ role = "candidate", login, navigate }) {
+  useEffect(() => {
+    prepareCsrf().catch(() => {});
+  }, []);
   const [identity, setIdentity] = useState(""),
     [password, setPassword] = useState(""),
     [busy, setBusy] = useState(false),

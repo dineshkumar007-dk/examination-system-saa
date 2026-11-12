@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { workspaceResources } from "./workspace-resources.js";
+import { loadWorkspaceData } from "./workspace-loader.js";
 import { api, dateText, localDate } from "./api.js";
 import { Avatar, Icon } from "./illustrations.jsx";
 import logo from "./assets/exampro-logo.jpeg";
@@ -116,78 +116,20 @@ export function Workspace({ user, navigate }) {
     let alive = true;
     setLoading(true);
     (async () => {
-      const c = { exams: [], centers: [], slots: [], pcs: [] };
-      const needed = workspaceResources(user.role, view);
-      const cached = async (path) => {
-        const hit = references.current.get(path);
-        if (hit && hit.expires > Date.now()) return hit.data;
-        const data = await api(path);
-        references.current.set(path, { data, expires: Date.now() + 15000 });
-        return data;
-      };
-      await Promise.all([
-        needed.exams
-          ? cached(
-              user.role === "candidate"
-                ? "/examinations?limit=100"
-                : "/manage/examinations?limit=100",
-            ).then((v) => (c.exams = v))
-          : null,
-        needed.centers
-          ? cached("/manage/centers").then((v) => (c.centers = v))
-          : null,
-        needed.slots ? api("/manage/slots").then((v) => (c.slots = v)) : null,
-        needed.pcs ? api("/manage/computers").then((v) => (c.pcs = v)) : null,
-      ]);
-      const q = `?page=${page}&limit=25&search=${encodeURIComponent(search)}`;
-      let data = [];
-      if (view === "Overview") {
-        if (user.role === "admin") {
-          const s = await api("/manage/overview");
-          if (alive) setStats(s);
-        } else {
-          const dashboard = await api("/dashboard");
-          data = dashboard.registrations;
-          if (alive) setProfile(dashboard.profile);
-        }
-      } else if (view === "Examinations")
-        data =
-          user.role === "candidate"
-            ? c.exams
-            : await api("/manage/examinations" + q);
-      else if (view === "Centers") data = c.centers;
-      else if (view === "Computers")
-        data = c.pcs.filter((p) => !selected || p.center_id === selected);
-      else if (view === "Slots") data = c.slots;
-      else if (view === "Registrations")
-        data = await api("/manage/registrations" + q);
-      else if (view === "Users") data = await api("/manage/users" + q);
-      else if (view === "Questions")
-        data = selected
-          ? await api("/manage/questions?examId=" + selected)
-          : [];
-      else if (view === "Admission")
-        data = await api("/invigilator/candidates" + q);
-      else if (view === "Results")
-        data = await api(
-          user.role === "candidate"
-            ? "/registrations/mine"
-            : "/manage/attempts" + q,
-        );
-      else if (view === "Notifications")
-        data = await api(
-          user.role === "admin" ? "/manage/notifications" : "/notifications",
-        );
-      else if (view === "Audit") data = await api("/manage/audit" + q);
-      else if (["My registrations", "Hall tickets"].includes(view))
-        data = await api("/registrations/mine");
-      else if (view === "Profile") {
-        const p = await api("/profile");
-        if (alive) setProfile(p);
-      }
+      const result = await loadWorkspaceData({
+        role: user.role,
+        view,
+        page,
+        search,
+        selected,
+        references: references.current,
+        api,
+      });
       if (alive) {
-        setCatalog(c);
-        setRows(data);
+        setCatalog(result.catalog);
+        setRows(result.rows);
+        if (result.stats !== undefined) setStats(result.stats);
+        if (result.profile !== undefined) setProfile(result.profile);
       }
     })()
       .catch((e) => {
