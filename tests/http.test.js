@@ -73,6 +73,8 @@ test("cross-origin and missing CSRF requests fail before any data mutation", asy
 test("CSRF cookies are HttpOnly and SameSite Strict, and signed tokens are required", async () => {
   const agent = request.agent(app);
   const issue = await agent.get("/api/csrf");
+  const otherTab = await agent.get("/api/csrf");
+  assert.equal(otherTab.body.token, issue.body.token);
   assert.match(issue.headers["set-cookie"][0], /HttpOnly/);
   assert.match(issue.headers["set-cookie"][0], /SameSite=Strict/);
   const r = await agent
@@ -87,6 +89,10 @@ test("CSRF cookies are HttpOnly and SameSite Strict, and signed tokens are requi
     .set("X-CSRF-Token", "tampered")
     .send({});
   assert.equal(bad.status, 403);
+  const tamperedCookie = await request(app)
+    .get("/api/csrf")
+    .set("Cookie", "ep_csrf=attacker.invalid-signature");
+  assert.notEqual(tamperedCookie.body.token, "attacker");
 });
 test("oversized requests and unknown endpoints return safe errors", async () => {
   const r = await request(app)

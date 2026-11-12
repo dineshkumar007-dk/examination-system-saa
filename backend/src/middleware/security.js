@@ -9,7 +9,12 @@ export const cookieOptions = () => ({
   path: "/",
 });
 export function csrfIssue(req, res) {
-  const value = token();
+  // Opening another login tab must not invalidate forms in an existing tab.
+  const [existing, signature] = String(req.cookies.ep_csrf || "").split(".");
+  const value =
+    existing && equal(signature, digest(`csrf:${existing}`))
+      ? existing
+      : token();
   res.cookie("ep_csrf", `${value}.${digest(`csrf:${value}`)}`, {
     ...cookieOptions(),
     maxAge: 8 * 3600000,
